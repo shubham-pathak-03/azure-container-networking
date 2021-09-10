@@ -99,36 +99,36 @@ func NewNetworkPolicyManager(informerFactory informers.SharedInformerFactory, ex
 }
 
 func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
-	m := map[string]json.RawMessage{}
+	m := map[NPMCacheKey]json.RawMessage{}
 	npmNamespaceCacheRaw, err := json.Marshal(npMgr.npmNamespaceCache)
 	if err != nil {
 		return nil, err
 	}
-	m["NsMap"] = npmNamespaceCacheRaw
+	m[NsMap] = npmNamespaceCacheRaw
 
 	podControllerRaw, err := json.Marshal(npMgr.podController)
 	if err != nil {
 		return nil, err
 	}
-	m["PodMap"] = podControllerRaw
+	m[PodMap] = podControllerRaw
 
 	listMapRaw, err := npMgr.ipsMgr.MarshalListMapJSON()
 	if err != nil {
 		return nil, err
 	}
-	m["ListMap"] = listMapRaw
+	m[ListMaap] = listMapRaw
 
 	setMapRaw, err := npMgr.ipsMgr.MarshalSetMapJSON()
 	if err != nil {
 		return nil, err
 	}
-	m["SetMap"] = setMapRaw
+	m[SetMap] = setMapRaw
 
 	nodeNameRaw, err := json.Marshal(npMgr.NodeName)
 	if err != nil {
 		return nil, err
 	}
-	m["Nodename"] = nodeNameRaw
+	m[NodeName] = nodeNameRaw
 	return json.Marshal(m)
 }
 

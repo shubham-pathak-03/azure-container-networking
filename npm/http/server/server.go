@@ -63,9 +63,9 @@ func NPMRestServerListenAndServe(config npmconfig.Config, npmEncoder json.Marsha
 	klog.Errorf("Failed to start NPM HTTP Server with error: %+v", srv.ListenAndServe())
 }
 
-func (n *NPMRestServer) npmCacheHandler(npmEncoder json.Marshaler) http.Handler {
+func (n *NPMRestServer) npmCacheHandler(npmCacheEncoder json.Marshaler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, err := npmEncoder.MarshalJSON()
+		b, err := json.Marshal(npmCacheEncoder)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
