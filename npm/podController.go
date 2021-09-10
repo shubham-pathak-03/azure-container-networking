@@ -109,15 +109,10 @@ func NewPodController(podInformer coreinformer.PodInformer, ipsMgr *ipsm.IpsetMa
 	return podController
 }
 
-func (c *podController) Encode(enc *json.Encoder) error {
+func (c *podController) MarshalJSON() ([]byte, error) {
 	c.Lock()
 	defer c.Unlock()
-
-	if err := enc.Encode(c.podMap); err != nil {
-		return fmt.Errorf("failed to encode podMap %w", err)
-	}
-
-	return nil
+	return json.Marshal(c.podMap)
 }
 
 func (c *podController) lengthOfPodMap() int {

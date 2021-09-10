@@ -1,13 +1,13 @@
 package dataplane
 
 import (
-	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -31,15 +31,13 @@ type Converter struct {
 
 // NpmCacheFromFile initialize NPM cache from file.
 func (c *Converter) NpmCacheFromFile(npmCacheJSONFile string) error {
-	file, err := os.Open(npmCacheJSONFile)
+	byteArray, err := ioutil.ReadFile(npmCacheJSONFile)
 	if err != nil {
-		return fmt.Errorf("failed to open file : %w", err)
+		return fmt.Errorf("error occurred during reading in file : %w", err)
 	}
-
-	defer file.Close()
-	c.NPMCache, err = cache.Decode(bufio.NewReader(file))
+	err = json.Unmarshal(byteArray, c.NPMCache)
 	if err != nil {
-		return fmt.Errorf("failed to decode npm cache due to : %w", err)
+		return fmt.Errorf("error occurred during unmarshalling : %w", err)
 	}
 	return nil
 }
@@ -60,12 +58,15 @@ func (c *Converter) NpmCache() error {
 		return fmt.Errorf("failed to request NPM Cache : %w", err)
 	}
 	defer resp.Body.Close()
-
-	c.NPMCache, err = cache.Decode(resp.Body)
+	byteArray, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("cannot decode NPM Cache : %w", err)
+		return fmt.Errorf("error occurred during reading response's data : %w", err)
 	}
-
+	c.NPMCache = &cache.NPMCache{}
+	err = json.Unmarshal(byteArray, c.NPMCache)
+	if err != nil {
+		return fmt.Errorf("error occurred during unmarshalling : %w", err)
+	}
 	return nil
 }
 

@@ -5,7 +5,6 @@ package npm
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
@@ -41,8 +40,10 @@ type npmNamespaceCache struct {
 	nsMap map[string]*Namespace // Key is ns-<nsname>
 }
 
-type NetworkPolicyManagerEncoder interface {
-	Encode(writer io.Writer) error
+func (n *npmNamespaceCache) MarshalJSON() ([]byte, error) {
+	n.Lock()
+	defer n.Unlock()
+	return json.Marshal(n.nsMap)
 }
 
 // NetworkPolicyManager contains informers for pod, namespace and networkpolicy.
@@ -97,39 +98,38 @@ func NewNetworkPolicyManager(informerFactory informers.SharedInformerFactory, ex
 	return npMgr
 }
 
-func (npMgr *NetworkPolicyManager) encode(enc *json.Encoder) error {
-	if err := enc.Encode(npMgr.NodeName); err != nil {
-		return fmt.Errorf("failed to encode nodename %w", err)
+func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
+	m := map[string]json.RawMessage{}
+	npmNamespaceCacheRaw, err := json.Marshal(npMgr.npmNamespaceCache)
+	if err != nil {
+		return nil, err
 	}
+	m["NsMap"] = npmNamespaceCacheRaw
 
-	npMgr.npmNamespaceCache.Lock()
-	defer npMgr.npmNamespaceCache.Unlock()
-	if err := enc.Encode(npMgr.npmNamespaceCache.nsMap); err != nil {
-		return fmt.Errorf("failed to encode npm namespace cache %w", err)
+	podControllerRaw, err := json.Marshal(npMgr.podController)
+	if err != nil {
+		return nil, err
 	}
+	m["PodMap"] = podControllerRaw
 
-	return nil
-}
-
-// Encode returns all information of pod, namespace, ipsm map information.
-// TODO(jungukcho): While this approach is beneficial to hold separate lock instead of global lock,
-// it has strict ordering limitation between encoding and decoding.
-// Will find flexible way by maintaining performance benefit.
-func (npMgr *NetworkPolicyManager) Encode(writer io.Writer) error {
-	enc := json.NewEncoder(writer)
-	if err := npMgr.encode(enc); err != nil {
-		return err
+	listMapRaw, err := npMgr.ipsMgr.MarshalListMapJSON()
+	if err != nil {
+		return nil, err
 	}
+	m["ListMap"] = listMapRaw
 
-	if err := npMgr.podController.Encode(enc); err != nil {
-		return err
+	setMapRaw, err := npMgr.ipsMgr.MarshalSetMapJSON()
+	if err != nil {
+		return nil, err
 	}
+	m["SetMap"] = setMapRaw
 
-	if err := npMgr.ipsMgr.Encode(enc); err != nil {
-		return fmt.Errorf("failed to encode ipsm cache %w", err)
+	nodeNameRaw, err := json.Marshal(npMgr.NodeName)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil
+	m["Nodename"] = nodeNameRaw
+	return json.Marshal(m)
 }
 
 // GetAppVersion returns network policy manager app version
