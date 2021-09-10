@@ -35,6 +35,7 @@ type NPMCache struct {
 	SetMap   map[string]*ipsm.Ipset
 }
 
+// NPMCacheEncoder is used only for unit tests to test encoding and decoding NPMCache.
 func NPMCacheEncoder(nodeName string) json.Marshaler {
 	noResyncPeriodFunc := func() time.Duration { return 0 }
 	kubeclient := k8sfake.NewSimpleClientset()
