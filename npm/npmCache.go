@@ -46,7 +46,7 @@ func NPMCacheEncoder(nodeName string) json.Marshaler {
 	exec := &fakeexec.FakeExec{}
 	npmVersion := "npm-ut-test"
 
-	npMgr := NewNetworkPolicyManager(kubeclient, kubeInformer, exec, npmVersion, fakeK8sVersion)
+	npMgr := NewNetworkPolicyManager(kubeInformer, exec, npmVersion, fakeK8sVersion)
 	npMgr.NodeName = nodeName
 	return npMgr
 }
