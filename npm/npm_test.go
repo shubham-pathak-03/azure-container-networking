@@ -50,6 +50,15 @@ func TestNSMapMarshalJSON(t *testing.T) {
 	assert.ElementsMatch(t, expect, nsMapRaw)
 }
 
+func TestMarshalJSONForNilValues(t *testing.T) {
+	npMgr := &NetworkPolicyManager{}
+	npmCacheRaw, err := npMgr.MarshalJSON()
+	assert.NoError(t, err)
+
+	expect := []byte(`{"NodeName":"","NsMap":null,"PodMap":null}`)
+	assert.ElementsMatch(t, expect, npmCacheRaw)
+}
+
 func TestMarshalJSON(t *testing.T) {
 	nodeName := "test-nodename"
 	npmCacheEncoder := NPMCacheEncoder(nodeName)
