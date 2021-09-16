@@ -106,7 +106,7 @@ func NewNetworkPolicyManager(informerFactory informers.SharedInformerFactory, ex
 }
 
 func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
-	m := map[NPMCacheKey]json.RawMessage{}
+	m := map[CacheKey]json.RawMessage{}
 
 	npmNamespaceCacheRaw, err := json.Marshal(npMgr.npmNamespaceCache)
 	if err != nil {

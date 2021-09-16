@@ -61,7 +61,7 @@ func TestMarshalJSONForNilValues(t *testing.T) {
 
 func TestMarshalJSON(t *testing.T) {
 	nodeName := "test-nodename"
-	npmCacheEncoder := NPMCacheEncoder(nodeName)
+	npmCacheEncoder := CacheEncoder(nodeName)
 	npmCacheRaw, err := npmCacheEncoder.MarshalJSON()
 	assert.NoError(t, err)
 
@@ -72,17 +72,17 @@ func TestMarshalJSON(t *testing.T) {
 
 func TestMarshalUnMarshalJSON(t *testing.T) {
 	nodeName := "test-nodename"
-	npmCacheEncoder := NPMCacheEncoder(nodeName)
+	npmCacheEncoder := CacheEncoder(nodeName)
 
 	npmCacheRaw, err := npmCacheEncoder.MarshalJSON()
 	assert.NoError(t, err)
 
-	decodedNPMCache := NPMCache{}
+	decodedNPMCache := Cache{}
 	if err := json.Unmarshal(npmCacheRaw, &decodedNPMCache); err != nil {
 		t.Errorf("failed to decode %s to NPMCache", npmCacheRaw)
 	}
 
-	expected := NPMCache{
+	expected := Cache{
 		ListMap:  make(map[string]*ipsm.Ipset),
 		NodeName: nodeName,
 		NsMap:    make(map[string]*Namespace),

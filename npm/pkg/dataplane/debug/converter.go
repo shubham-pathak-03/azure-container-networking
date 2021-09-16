@@ -26,7 +26,7 @@ type Converter struct {
 	ListMap        map[string]string // key: hash(value), value: one of namespace, label of namespace, multiple values
 	SetMap         map[string]string // key: hash(value), value: one of label of pods, cidr, namedport
 	AzureNPMChains map[string]bool
-	NPMCache       *npm.NPMCache
+	NPMCache       *npm.Cache
 }
 
 // NpmCacheFromFile initialize NPM cache from file.
@@ -36,7 +36,7 @@ func (c *Converter) NpmCacheFromFile(npmCacheJSONFile string) error {
 		return fmt.Errorf("failed to read %s file : %w", npmCacheJSONFile, err)
 	}
 
-	c.NPMCache = &npm.NPMCache{}
+	c.NPMCache = &npm.Cache{}
 	err = json.Unmarshal(byteArray, c.NPMCache)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal %s due to %w", string(byteArray), err)
@@ -64,7 +64,7 @@ func (c *Converter) NpmCache() error {
 	if err != nil {
 		return fmt.Errorf("failed to read response's data : %w", err)
 	}
-	c.NPMCache = &npm.NPMCache{}
+	c.NPMCache = &npm.Cache{}
 	err = json.Unmarshal(byteArray, c.NPMCache)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal %s due to %w", string(byteArray), err)

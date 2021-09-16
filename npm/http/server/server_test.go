@@ -18,7 +18,7 @@ func TestGetNPMCacheHandler(t *testing.T) {
 	assert := assert.New(t)
 
 	nodeName := "nodename"
-	npmCacheEncoder := npm.NPMCacheEncoder(nodeName)
+	npmCacheEncoder := npm.CacheEncoder(nodeName)
 	n := &NPMRestServer{}
 	handler := n.npmCacheHandler(npmCacheEncoder)
 
@@ -40,13 +40,13 @@ func TestGetNPMCacheHandler(t *testing.T) {
 		t.Errorf("failed to read response's data : %w", err)
 	}
 
-	actual := &npm.NPMCache{}
+	actual := &npm.Cache{}
 	err = json.Unmarshal(byteArray, actual)
 	if err != nil {
 		t.Fatalf("failed to unmarshal %s due to %v", string(byteArray), err)
 	}
 
-	expected := &npm.NPMCache{
+	expected := &npm.Cache{
 		NodeName: nodeName,
 		NsMap:    make(map[string]*npm.Namespace),
 		PodMap:   make(map[string]*npm.NpmPod),

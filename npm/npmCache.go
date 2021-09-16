@@ -13,17 +13,18 @@ import (
 	fakeexec "k8s.io/utils/exec/testing"
 )
 
-type NPMCacheKey string
+type CacheKey string
 
+// NPMCache Key Contract for Json marshal and unmarshal
 const (
-	NodeName NPMCacheKey = "NodeName"
-	NsMap    NPMCacheKey = "NsMap"
-	PodMap   NPMCacheKey = "PodMap"
-	ListMap  NPMCacheKey = "ListMap"
-	SetMap   NPMCacheKey = "SetMap"
+	NodeName CacheKey = "NodeName"
+	NsMap    CacheKey = "NsMap"
+	PodMap   CacheKey = "PodMap"
+	ListMap  CacheKey = "ListMap"
+	SetMap   CacheKey = "SetMap"
 )
 
-type NPMCache struct {
+type Cache struct {
 	NodeName string
 	NsMap    map[string]*Namespace
 	PodMap   map[string]*NpmPod
@@ -31,8 +32,8 @@ type NPMCache struct {
 	SetMap   map[string]*ipsm.Ipset
 }
 
-// NPMCacheEncoder is used only for unit tests to test encoding and decoding NPMCache.
-func NPMCacheEncoder(nodeName string) json.Marshaler {
+// CacheEncoder is used only for unit tests to test encoding and decoding Cache.
+func CacheEncoder(nodeName string) json.Marshaler {
 	noResyncPeriodFunc := func() time.Duration { return 0 }
 	kubeclient := k8sfake.NewSimpleClientset()
 	kubeInformer := kubeinformers.NewSharedInformerFactory(kubeclient, noResyncPeriodFunc())
