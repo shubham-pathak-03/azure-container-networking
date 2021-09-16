@@ -7,11 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testName1 = "test-set1"
-const testName2 = "test-set2"
+const (
+	testName1 = "test-set1"
+	testName2 = "test-set2"
+)
 
-var numSetsMetric = &basicMetric{ResetNumIPSets, IncNumIPSets, DecNumIPSets, GetNumIPSets}
-var setExecMetric = &recordingMetric{RecordIPSetExecTime, GetIPSetExecCount}
+var (
+	numSetsMetric = &basicMetric{ResetNumIPSets, IncNumIPSets, DecNumIPSets, GetNumIPSets}
+	setExecMetric = &recordingMetric{RecordIPSetExecTime, GetIPSetExecCount}
+)
 
 type testSet struct {
 	name       string

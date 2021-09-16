@@ -2,8 +2,10 @@ package metrics
 
 import "testing"
 
-var numRulesMetric = &basicMetric{ResetNumACLRules, IncNumACLRules, DecNumACLRules, GetNumACLRules}
-var ruleExecMetric = &recordingMetric{RecordACLRuleExecTime, GetACLRuleExecCount}
+var (
+	numRulesMetric = &basicMetric{ResetNumACLRules, IncNumACLRules, DecNumACLRules, GetNumACLRules}
+	ruleExecMetric = &recordingMetric{RecordACLRuleExecTime, GetACLRuleExecCount}
+)
 
 func TestRecordACLRuleExecTime(t *testing.T) {
 	testStopAndRecord(t, ruleExecMetric)
