@@ -34,6 +34,15 @@ func getCountValue(summaryMetric prometheus.Summary) (int, error) {
 }
 
 // This function is slow.
+func getQuantiles(summaryMetric prometheus.Summary) ([]*dto.Quantile, error) {
+	dtoMetric, err := getDTOMetric(summaryMetric)
+	if err != nil {
+		return nil, err
+	}
+	return dtoMetric.Summary.GetQuantile(), nil
+}
+
+// This function is slow.
 func getDTOMetric(collector prometheus.Collector) (*dto.Metric, error) {
 	channel := make(chan prometheus.Metric, 1)
 	collector.Collect(channel)

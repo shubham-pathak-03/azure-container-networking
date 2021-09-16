@@ -99,6 +99,7 @@ func GetNumIPSetEntries() (int, error) {
 // GetNumEntriesForIPSet returns the number entries for IPSet setName.
 // This function is slow.
 // TODO could use the map if this function needs to be faster.
+// If updated, replace GetNumEntriesForIPSet() with getVecValue() in assertEqualMapAndMetricElements() in ipsets_test.go
 func GetNumEntriesForIPSet(setName string) (int, error) {
 	labels := getIPSetInventoryLabels(setName)
 	return getVecValue(ipsetInventory, labels)
