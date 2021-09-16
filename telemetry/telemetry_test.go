@@ -74,10 +74,11 @@ func TestMain(m *testing.M) {
 		return
 	}
 
+	pf := platform.New()
 	if runtime.GOOS == "linux" {
-		platform.ExecuteCommand("cp metadata_test.json /tmp/azuremetadata.json")
+		pf.ExecuteCommand("cp metadata_test.json /tmp/azuremetadata.json")
 	} else {
-		platform.ExecuteCommand("copy metadata_test.json azuremetadata.json")
+		pf.ExecuteCommand("copy metadata_test.json azuremetadata.json")
 	}
 
 	reportManager = &ReportManager{}
@@ -98,9 +99,9 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
 	if runtime.GOOS == "linux" {
-		platform.ExecuteCommand("rm /tmp/azuremetadata.json")
+		pf.ExecuteCommand("rm /tmp/azuremetadata.json")
 	} else {
-		platform.ExecuteCommand("del azuremetadata.json")
+		pf.ExecuteCommand("del azuremetadata.json")
 	}
 
 	tb.Cleanup(FdName)
@@ -127,7 +128,8 @@ func handlePayload(rw http.ResponseWriter, req *http.Request) {
 }
 
 func TestGetOSDetails(t *testing.T) {
-	reportManager.Report.(*CNIReport).GetOSDetails()
+	pf := platform.New()
+	reportManager.Report.(*CNIReport).GetOSDetails(pf)
 	if reportManager.Report.(*CNIReport).ErrorMessage != "" {
 		t.Errorf("GetOSDetails failed due to %v", reportManager.Report.(*CNIReport).ErrorMessage)
 	}
@@ -260,7 +262,8 @@ func TestReadConfigFile(t *testing.T) {
 }
 
 func TestStartTelemetryService(t *testing.T) {
-	err := StartTelemetryService("", nil)
+	tb := NewTelemetryBuffer()
+	err := tb.startTelemetryService("", nil)
 	if err == nil {
 		t.Errorf("StartTelemetryService didnt return error for incorrect service name %v", err)
 	}

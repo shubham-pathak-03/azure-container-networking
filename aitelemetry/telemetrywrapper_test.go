@@ -29,12 +29,13 @@ func TestMain(m *testing.M) {
 		fmt.Printf("TestST LogDir configuration succeeded\n")
 	}
 
+	pf := platform.New()
 	if runtime.GOOS == "linux" {
-		platform.ExecuteCommand("cp metadata_test.json /tmp/azuremetadata.json")
+		pf.ExecuteCommand("cp metadata_test.json /tmp/azuremetadata.json")
 	} else {
 		metadataFile := filepath.FromSlash(os.Getenv("TEMP")) + "\\azuremetadata.json"
 		cmd := fmt.Sprintf("copy metadata_test.json %s", metadataFile)
-		platform.ExecuteCommand(cmd)
+		pf.ExecuteCommand(cmd)
 	}
 
 	hostu, _ := url.Parse("tcp://" + hostAgentUrl)
@@ -54,11 +55,11 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
 	if runtime.GOOS == "linux" {
-		platform.ExecuteCommand("rm /tmp/azuremetadata.json")
+		pf.ExecuteCommand("rm /tmp/azuremetadata.json")
 	} else {
 		metadataFile := filepath.FromSlash(os.Getenv("TEMP")) + "\\azuremetadata.json"
 		cmd := fmt.Sprintf("del %s", metadataFile)
-		platform.ExecuteCommand(cmd)
+		pf.ExecuteCommand(cmd)
 	}
 
 	log.Close()

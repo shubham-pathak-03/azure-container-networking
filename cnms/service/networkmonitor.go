@@ -114,8 +114,9 @@ func main() {
 		return
 	}
 
+	pf := platform.New()
 	// Log platform information.
-	log.Printf("[monitor] Running on %v", platform.GetOSInfo())
+	log.Printf("[monitor] Running on %v", pf.GetOSInfo())
 
 	reportManager := &telemetry.ReportManager{
 		ContentType: telemetry.ContentType,
@@ -128,7 +129,7 @@ func main() {
 		},
 	}
 
-	reportManager.Report.(*telemetry.CNIReport).GetOSDetails()
+	reportManager.Report.(*telemetry.CNIReport).GetOSDetails(pf)
 
 	netMonitor := &cnms.NetworkMonitor{
 		AddRulesToBeValidated:    make(map[string]int),

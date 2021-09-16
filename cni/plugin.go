@@ -192,7 +192,8 @@ func (plugin *Plugin) UninitializeKeyValueStore(force bool) error {
 func (plugin *Plugin) IsSafeToRemoveLock(processName string) (bool, error) {
 	if plugin != nil && plugin.Store != nil {
 		// check if get process command supported
-		if cmdErr := platform.GetProcessSupport(); cmdErr != nil {
+		pf := platform.New()
+		if cmdErr := pf.GetProcessSupport(); cmdErr != nil {
 			log.Errorf("Get process cmd not supported. Error %v", cmdErr)
 			return false, cmdErr
 		}
@@ -213,7 +214,7 @@ func (plugin *Plugin) IsSafeToRemoveLock(processName string) (bool, error) {
 		log.Printf("Read from Lock file:%s", content)
 		// Get the process name if running and
 		// check if that matches with our expected process
-		pName, err := platform.GetProcessNameByID(string(content))
+		pName, err := pf.GetProcessNameByID(string(content))
 		if err != nil {
 			return true, nil
 		}

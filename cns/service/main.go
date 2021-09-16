@@ -457,10 +457,11 @@ func main() {
 		logger.InitAI(aiConfig, ts.DisableTrace, ts.DisableMetric, ts.DisableEvent)
 	}
 
+	pf := platform.New()
 	// Log platform information.
-	logger.Printf("Running on %v", platform.GetOSInfo())
+	logger.Printf("Running on %v", pf.GetOSInfo())
 
-	err = platform.CreateDirectory(storeFileLocation)
+	err = pf.CreateDirectory(storeFileLocation)
 	if err != nil {
 		logger.Errorf("Failed to create File Store directory %s, due to Error:%v", storeFileLocation, err.Error())
 		return

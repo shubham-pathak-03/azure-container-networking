@@ -7,8 +7,8 @@ import (
 
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/platform"
 )
 
@@ -59,7 +59,8 @@ func NewTransparentEndpointClient(
 
 func setArpProxy(ifName string) error {
 	cmd := fmt.Sprintf("echo 1 > /proc/sys/net/ipv4/conf/%v/proxy_arp", ifName)
-	_, err := platform.ExecuteCommand(cmd)
+	pf := platform.New()
+	_, err := pf.ExecuteCommand(cmd)
 	return err
 }
 
@@ -72,8 +73,8 @@ func (client *TransparentEndpointClient) AddEndpoints(epInfo *EndpointInfo) erro
 		}
 	}
 
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
 
@@ -148,8 +149,8 @@ func (client *TransparentEndpointClient) MoveEndpointsToContainerNS(epInfo *Endp
 }
 
 func (client *TransparentEndpointClient) SetupContainerInterfaces(epInfo *EndpointInfo) error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
 		return err
 	}
 
@@ -159,8 +160,8 @@ func (client *TransparentEndpointClient) SetupContainerInterfaces(epInfo *Endpoi
 }
 
 func (client *TransparentEndpointClient) ConfigureContainerInterfacesAndRoutes(epInfo *EndpointInfo) error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
 

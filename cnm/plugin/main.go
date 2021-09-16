@@ -152,7 +152,8 @@ func main() {
 		return
 	}
 
-	err = platform.CreateDirectory(storeFileLocation)
+	pf := platform.New()
+	err = pf.CreateDirectory(storeFileLocation)
 	if err != nil {
 		log.Errorf("Failed to create File Store directory %s, due to Error:%v", storeFileLocation, err.Error())
 		return
@@ -177,7 +178,7 @@ func main() {
 	}
 
 	// Log platform information.
-	log.Printf("Running on %v", platform.GetOSInfo())
+	log.Printf("Running on %v", pf.GetOSInfo())
 	common.LogNetworkInterfaces()
 
 	// Set plugin options.

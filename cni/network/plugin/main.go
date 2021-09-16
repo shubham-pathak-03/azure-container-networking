@@ -177,10 +177,10 @@ func main() {
 
 	if cniCmd != cni.CmdVersion {
 		log.Printf("CNI_COMMAND environment variable set to %s", cniCmd)
+		pf := platform.New()
+		cniReport.GetReport(pluginName, version, ipamQueryURL, pf)
 
-		cniReport.GetReport(pluginName, version, ipamQueryURL)
-
-		upTime, err := platform.GetLastRebootTime()
+		upTime, err := pf.GetLastRebootTime()
 		if err == nil {
 			cniReport.VMUptime = upTime.Format("2006-01-02 15:04:05")
 		}

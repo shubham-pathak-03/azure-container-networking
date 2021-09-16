@@ -133,7 +133,8 @@ func GetEbtableRules(tableName, chainName string) ([]string, error) {
 	command := fmt.Sprintf(
 		"ebtables -t %s -L %s --Lmac2",
 		tableName, chainName)
-	out, err := platform.ExecuteCommand(command)
+	pf := platform.New()
+	out, err := pf.ExecuteCommand(command)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +228,8 @@ func EbTableRuleExists(tableName, chainName, matchSet string) (bool, error) {
 // runEbCmd runs an EB rule command.
 func runEbCmd(table, action, chain, rule string) error {
 	command := fmt.Sprintf("ebtables -t %s %s %s %s", table, action, chain, rule)
-	_, err := platform.ExecuteCommand(command)
+	pf := platform.New()
+	_, err := pf.ExecuteCommand(command)
 
 	return err
 }

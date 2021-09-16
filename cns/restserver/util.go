@@ -458,10 +458,11 @@ func (service *HTTPRestService) restoreNetworkState() error {
 	rebooted := false
 	modTime, err := service.store.GetModificationTime()
 
+	pf := platform.New()
 	if err == nil {
 		logger.Printf("[Azure CNS] Store timestamp is %v.", modTime)
 
-		rebootTime, err := platform.GetLastRebootTime()
+		rebootTime, err := pf.GetLastRebootTime()
 		if err == nil && rebootTime.After(modTime) {
 			logger.Printf("[Azure CNS] reboot time %v mod time %v", rebootTime, modTime)
 			rebooted = true
@@ -481,7 +482,7 @@ func (service *HTTPRestService) restoreNetworkState() error {
 			}
 
 			if enableSnat {
-				err := platform.SetOutboundSNAT(nwInfo.NicInfo.Subnet)
+				err := pf.SetOutboundSNAT(nwInfo.NicInfo.Subnet)
 				if err != nil {
 					logger.Printf("[Azure CNS] Error setting up SNAT outbound rule %v", err)
 					return err

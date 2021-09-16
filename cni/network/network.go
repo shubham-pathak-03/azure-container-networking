@@ -141,8 +141,9 @@ func (plugin *netPlugin) Start(config *common.PluginConfig) error {
 
 	// Log platform information.
 	log.Printf("[cni-net] Plugin %v version %v.", plugin.Name, plugin.Version)
-	log.Printf("[cni-net] Running on %v", platform.GetOSInfo())
-	platform.PrintDependencyPackageDetails()
+	pf := platform.New()
+	log.Printf("[cni-net] Running on %v", pf.GetOSInfo())
+	pf.PrintDependencyPackageDetails()
 	common.LogNetworkInterfaces()
 
 	// Initialize network manager. rehyrdration not required on reboot for cni plugin

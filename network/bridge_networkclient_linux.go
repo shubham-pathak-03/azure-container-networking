@@ -8,8 +8,8 @@ import (
 	"github.com/Azure/azure-container-networking/ebtables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 )
 
 const (
@@ -59,7 +59,7 @@ func (client *LinuxBridgeClient) CreateBridge() error {
 		return err
 	}
 
-	return epcommon.DisableRAForInterface(client.bridgeName)
+	return networkutility.DisableRAForInterface(client.bridgeName)
 }
 
 func (client *LinuxBridgeClient) DeleteBridge() error {
@@ -124,7 +124,7 @@ func (client *LinuxBridgeClient) AddL2Rules(extIf *externalInterface) error {
 			return err
 		}
 
-		if err := epcommon.EnableIPV6Forwarding(); err != nil {
+		if err := networkutility.EnableIPV6Forwarding(); err != nil {
 			return err
 		}
 	}

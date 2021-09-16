@@ -7,8 +7,8 @@ import (
 
 	"github.com/Azure/azure-container-networking/log"
 
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
 )
 
@@ -42,8 +42,8 @@ func NewInfraVnetClient(hostIfName string, contIfName string, nl netlinkinterfac
 }
 
 func (client *OVSInfraVnetClient) CreateInfraVnetEndpoint(bridgeName string) error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.CreateEndpoint(client.hostInfraVethName, client.ContainerInfraVethName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.CreateEndpoint(client.hostInfraVethName, client.ContainerInfraVethName); err != nil {
 		log.Printf("Creating infraep failed with error %v", err)
 		return err
 	}
@@ -102,8 +102,8 @@ func (client *OVSInfraVnetClient) MoveInfraEndpointToContainerNS(netnsPath strin
 }
 
 func (client *OVSInfraVnetClient) SetupInfraVnetContainerInterface() error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.SetupContainerInterface(client.ContainerInfraVethName, azureInfraIfName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.SetupContainerInterface(client.ContainerInfraVethName, azureInfraIfName); err != nil {
 		return newErrorOVSInfraVnetClient(err.Error())
 	}
 

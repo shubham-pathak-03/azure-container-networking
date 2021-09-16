@@ -3,7 +3,7 @@ package network
 import (
 	"fmt"
 
-	"github.com/Azure/azure-container-networking/network/epcommon"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/network/ovssnat"
 )
 
@@ -50,7 +50,7 @@ func AddSnatEndpointRules(client *OVSEndpointClient) error {
 			return err
 		}
 
-		if err := epcommon.EnableIPForwarding(ovssnat.SnatBridgeName); err != nil {
+		if err := networkutility.EnableIPForwarding(ovssnat.SnatBridgeName); err != nil {
 			return err
 		}
 

@@ -166,8 +166,9 @@ func (kvs *jsonFileStore) flush() error {
 		return fmt.Errorf("temp file close failed with: %v", err)
 	}
 
+	pf := platform.New()
 	// atomic replace
-	if err = platform.ReplaceFile(tmpFileName, kvs.fileName); err != nil {
+	if err = pf.ReplaceFile(tmpFileName, kvs.fileName); err != nil {
 		return fmt.Errorf("rename temp file to state file failed:%v", err)
 	}
 

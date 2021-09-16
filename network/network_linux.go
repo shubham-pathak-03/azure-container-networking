@@ -13,8 +13,8 @@ import (
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/platform"
 	"golang.org/x/sys/unix"
 )
@@ -206,7 +206,8 @@ func getMajorVersion(version string) (int, error) {
 }
 
 func isGreaterOrEqaulUbuntuVersion(versionToMatch int) bool {
-	osInfo, err := platform.GetOSDetails()
+	pf := platform.New()
+	osInfo, err := pf.GetOSDetails()
 	if err != nil {
 		log.Printf("[net] Unable to get OS Details: %v", err)
 		return false
@@ -237,7 +238,8 @@ func readDnsInfo(ifName string) (DNSInfo, error) {
 	var dnsInfo DNSInfo
 
 	cmd := fmt.Sprintf("systemd-resolve --status %s", ifName)
-	out, err := platform.ExecuteCommand(cmd)
+	pf := platform.New()
+	out, err := pf.ExecuteCommand(cmd)
 	if err != nil {
 		return dnsInfo, err
 	}
@@ -336,10 +338,10 @@ func applyDnsConfig(extIf *externalInterface, ifName string) error {
 			buf := fmt.Sprintf("--set-dns=%s", server)
 			setDnsList = setDnsList + " " + buf
 		}
-
+		pf := platform.New()
 		if setDnsList != "" {
 			cmd := fmt.Sprintf("systemd-resolve --interface=%s%s", ifName, setDnsList)
-			_, err = platform.ExecuteCommand(cmd)
+			_, err = pf.ExecuteCommand(cmd)
 			if err != nil {
 				return err
 			}
@@ -347,7 +349,7 @@ func applyDnsConfig(extIf *externalInterface, ifName string) error {
 
 		if extIf.DNSInfo.Suffix != "" {
 			cmd := fmt.Sprintf("systemd-resolve --interface=%s --set-domain=%s", ifName, extIf.DNSInfo.Suffix)
-			_, err = platform.ExecuteCommand(cmd)
+			_, err = pf.ExecuteCommand(cmd)
 		}
 
 	}
@@ -428,8 +430,9 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 	isGreaterOrEqualUbuntu17 := isGreaterOrEqaulUbuntuVersion(ubuntuVersion17)
 	isSystemdResolvedActive := false
 	if isGreaterOrEqualUbuntu17 {
+		pf := platform.New()
 		// Don't copy dns servers if systemd-resolved isn't available
-		if _, cmderr := platform.ExecuteCommand("systemctl status systemd-resolved"); cmderr == nil {
+		if _, cmderr := pf.ExecuteCommand("systemctl status systemd-resolved"); cmderr == nil {
 			isSystemdResolvedActive = true
 			log.Printf("[net] Saving dns config from %v", extIf.Name)
 			if err = saveDnsConfig(extIf); err != nil {
@@ -601,8 +604,8 @@ func addIpv6NatGateway(nl netlinkinterface.NetlinkInterface, nwInfo *NetworkInfo
 				IP:   subnetInfo.Gateway,
 				Mask: subnetInfo.Prefix.Mask,
 			}}
-			epc := epcommon.NewEPCommon(nl)
-			err := epc.AssignIPToInterface(nwInfo.BridgeName, ipAddr)
+			netUtil := networkutility.NewNetworkUtility(nl)
+			err := netUtil.AssignIPToInterface(nwInfo.BridgeName, ipAddr)
 			if err != nil {
 				return newErrorNetworkManager(err.Error())
 			}
@@ -617,7 +620,7 @@ func addIpv6SnatRule(extIf *externalInterface, nwInfo *NetworkInfo) error {
 	log.Printf("[net] Adding ipv6 snat rule")
 	for _, ipAddr := range extIf.IPAddresses {
 		if ipAddr.IP.To4() == nil {
-			if err := epcommon.AddSnatRule("", ipAddr.IP); err != nil {
+			if err := networkutility.AddSnatRule("", ipAddr.IP); err != nil {
 				return err
 			}
 		}

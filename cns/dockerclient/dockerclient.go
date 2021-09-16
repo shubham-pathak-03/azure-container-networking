@@ -139,7 +139,8 @@ func (dockerClient *DockerClient) CreateNetwork(networkName string, nicInfo *imd
 	}
 
 	if enableSnat {
-		err = platform.SetOutboundSNAT(nicInfo.Subnet)
+		pf := platform.New()
+		err = pf.SetOutboundSNAT(nicInfo.Subnet)
 		if err != nil {
 			logger.Printf("[Azure CNS] Error setting up SNAT outbound rule %v", err)
 		}
@@ -178,7 +179,8 @@ func (dockerClient *DockerClient) DeleteNetwork(networkName string) error {
 
 		cmd := fmt.Sprintf("iptables -t nat -D POSTROUTING -m iprange ! --dst-range 168.63.129.16 -m addrtype ! --dst-type local ! -d %v -j MASQUERADE",
 			primaryNic.Subnet)
-		_, err = platform.ExecuteCommand(cmd)
+		pf := platform.New()
+		_, err = pf.ExecuteCommand(cmd)
 		if err != nil {
 			logger.Printf("[Azure CNS] Error Removing Outbound SNAT rule %v", err)
 		}

@@ -192,13 +192,14 @@ func appIPV6RouteEntry(nwInfo *NetworkInfo) error {
 
 		cmd := fmt.Sprintf(routeCmd, "delete", nwInfo.Subnets[1].Prefix.String(),
 			ifName, ipv6DefaultHop)
-		if out, err = platform.ExecuteCommand(cmd); err != nil {
+		pf := platform.New()
+		if out, err = pf.ExecuteCommand(cmd); err != nil {
 			log.Printf("[net] Deleting ipv6 route failed: %v:%v", out, err)
 		}
 
 		cmd = fmt.Sprintf(routeCmd, "add", nwInfo.Subnets[1].Prefix.String(),
 			ifName, ipv6DefaultHop)
-		if out, err = platform.ExecuteCommand(cmd); err != nil {
+		if out, err = pf.ExecuteCommand(cmd); err != nil {
 			log.Printf("[net] Adding ipv6 route failed: %v:%v", out, err)
 		}
 	}

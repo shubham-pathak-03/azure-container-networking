@@ -105,7 +105,8 @@ func RunCmd(version, params string) error {
 		cmd = fmt.Sprintf("%s -w %d %s", iptCmd, lockTimeout, params)
 	}
 
-	if _, err := platform.ExecuteCommand(cmd); err != nil {
+	pf := platform.New()
+	if _, err := pf.ExecuteCommand(cmd); err != nil {
 		return err
 	}
 

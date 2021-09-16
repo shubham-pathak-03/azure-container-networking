@@ -37,7 +37,7 @@ const (
 )
 
 // GetOSInfo returns OS version information.
-func GetOSInfo() string {
+func (Platform) GetOSInfo() string {
 	info, err := ioutil.ReadFile("/proc/version")
 	if err != nil {
 		return "unknown"
@@ -46,14 +46,14 @@ func GetOSInfo() string {
 	return string(info)
 }
 
-func GetProcessSupport() error {
+func (p Platform) GetProcessSupport() error {
 	cmd := fmt.Sprintf("ps -p %v -o comm=", os.Getpid())
-	_, err := ExecuteCommand(cmd)
+	_, err := p.ExecuteCommand(cmd)
 	return err
 }
 
 // GetLastRebootTime returns the last time the system rebooted.
-func GetLastRebootTime() (time.Time, error) {
+func (Platform) GetLastRebootTime() (time.Time, error) {
 	// Query last reboot time.
 	out, err := exec.Command("uptime", "-s").Output()
 	if err != nil {
@@ -72,7 +72,7 @@ func GetLastRebootTime() (time.Time, error) {
 	return rebootTime.UTC(), nil
 }
 
-func ExecuteCommand(command string) (string, error) {
+func (Platform) ExecuteCommand(command string) (string, error) {
 	log.Printf("[Azure-Utils] %s", command)
 
 	var stderr bytes.Buffer
@@ -89,10 +89,10 @@ func ExecuteCommand(command string) (string, error) {
 	return out.String(), nil
 }
 
-func SetOutboundSNAT(subnet string) error {
+func (p Platform) SetOutboundSNAT(subnet string) error {
 	cmd := fmt.Sprintf("iptables -t nat -A POSTROUTING -m iprange ! --dst-range 168.63.129.16 -m addrtype ! --dst-type local ! -d %v -j MASQUERADE",
 		subnet)
-	_, err := ExecuteCommand(cmd)
+	_, err := p.ExecuteCommand(cmd)
 	if err != nil {
 		log.Printf("SNAT Iptable rule was not set")
 		return err
@@ -102,24 +102,24 @@ func SetOutboundSNAT(subnet string) error {
 
 // ClearNetworkConfiguration clears the azure-vnet.json contents.
 // This will be called only when reboot is detected - This is windows specific
-func ClearNetworkConfiguration() (bool, error) {
+func (Platform) ClearNetworkConfiguration() (bool, error) {
 	return false, nil
 }
 
-func KillProcessByName(processName string) error {
+func (p Platform) KillProcessByName(processName string) error {
 	cmd := fmt.Sprintf("pkill -f %v", processName)
-	_, err := ExecuteCommand(cmd)
+	_, err := p.ExecuteCommand(cmd)
 	return err
 }
 
 // SetSdnRemoteArpMacAddress sets the regkey for SDNRemoteArpMacAddress needed for multitenancy
 // This operation is specific to windows OS
-func SetSdnRemoteArpMacAddress() error {
+func (Platform) SetSdnRemoteArpMacAddress() error {
 	return nil
 }
 
-func GetOSDetails() (map[string]string, error) {
-	linesArr, err := ReadFileByLines(osReleaseFile)
+func (Platform) GetOSDetails() (map[string]string, error) {
+	linesArr, err := readFileByLines(osReleaseFile)
 	if err != nil || len(linesArr) <= 0 {
 		return nil, err
 	}
@@ -136,10 +136,10 @@ func GetOSDetails() (map[string]string, error) {
 	return osInfoArr, nil
 }
 
-func GetProcessNameByID(pidstr string) (string, error) {
+func (p Platform) GetProcessNameByID(pidstr string) (string, error) {
 	pidstr = strings.Trim(pidstr, "\n")
 	cmd := fmt.Sprintf("ps -p %s -o comm=", pidstr)
-	out, err := ExecuteCommand(cmd)
+	out, err := p.ExecuteCommand(cmd)
 	if err != nil {
 		log.Printf("GetProcessNameByID returned error: %v", err)
 		return "", err
@@ -151,15 +151,15 @@ func GetProcessNameByID(pidstr string) (string, error) {
 	return out, nil
 }
 
-func PrintDependencyPackageDetails() {
-	out, err := ExecuteCommand("iptables --version")
+func (p Platform) PrintDependencyPackageDetails() {
+	out, err := p.ExecuteCommand("iptables --version")
 	out = strings.TrimSuffix(out, "\n")
 	log.Printf("[cni-net] iptable version:%s, err:%v", out, err)
-	out, err = ExecuteCommand("ebtables --version")
+	out, err = p.ExecuteCommand("ebtables --version")
 	out = strings.TrimSuffix(out, "\n")
 	log.Printf("[cni-net] ebtable version %s, err:%v", out, err)
 }
 
-func ReplaceFile(source, destination string) error {
+func (Platform) ReplaceFile(source, destination string) error {
 	return os.Rename(source, destination)
 }

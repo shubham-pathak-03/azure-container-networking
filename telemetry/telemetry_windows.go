@@ -37,9 +37,9 @@ func (report *CNIReport) GetSystemDetails() {
 	report.SystemDetails = SystemInfo{}
 }
 
-func (report *CNIReport) GetOSDetails() {
+func (report *CNIReport) GetOSDetails(pf *platform.Platform) {
 	report.OSDetails = OSInfo{OSType: runtime.GOOS}
-	out, err := platform.ExecuteCommand(versionCmd)
+	out, err := pf.ExecuteCommand(versionCmd)
 	if err == nil {
 		report.OSDetails.OSVersion = strings.Replace(out, delimiter, "", -1)
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/platform"
 	"github.com/Azure/azure-container-networking/store"
+	"github.com/Azure/azure-container-networking/telemetry/platforminterface"
 )
 
 // TelemetryConfig - telemetry config read by telemetry service
@@ -57,6 +58,7 @@ type TelemetryBuffer struct {
 	data        chan interface{}
 	cancel      chan bool
 	mutex       sync.Mutex
+	pfinterface platforminterface.PlatformInterface
 }
 
 // Buffer object holds the different types of reports
@@ -71,6 +73,7 @@ func NewTelemetryBuffer() *TelemetryBuffer {
 	tb.data = make(chan interface{}, MaxNumReports)
 	tb.cancel = make(chan bool, 1)
 	tb.connections = make([]net.Conn, 0)
+	tb.pfinterface = platform.New()
 
 	return &tb
 }
@@ -276,9 +279,9 @@ func WaitForTelemetrySocket(maxAttempt int, waitTimeInMillisecs time.Duration) {
 	}
 }
 
-// StartTelemetryService - Kills if any telemetry service runs and start new telemetry service
-func StartTelemetryService(path string, args []string) error {
-	platform.KillProcessByName(TelemetryServiceProcessName)
+// startTelemetryService - Kills if any telemetry service runs and start new telemetry service
+func (tb *TelemetryBuffer) startTelemetryService(path string, args []string) error {
+	tb.pfinterface.KillProcessByName(TelemetryServiceProcessName)
 
 	log.Logf("[Telemetry] Starting telemetry service process :%v args:%v", path, args)
 
@@ -311,13 +314,13 @@ func ReadConfigFile(filePath string) (TelemetryConfig, error) {
 
 // ConnectToTelemetryService - Attempt to spawn telemetry process if it's not already running.
 func (tb *TelemetryBuffer) ConnectToTelemetryService(telemetryNumRetries, telemetryWaitTimeInMilliseconds int) {
-	path, dir := getTelemetryServiceDirectory()
+	path, dir := tb.getTelemetryServiceDirectory()
 	args := []string{"-d", dir}
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := tb.Connect(); err != nil {
 			log.Logf("Connection to telemetry socket failed: %v", err)
 			tb.Cleanup(FdName)
-			StartTelemetryService(path, args)
+			tb.startTelemetryService(path, args)
 			WaitForTelemetrySocket(telemetryNumRetries, time.Duration(telemetryWaitTimeInMilliseconds))
 		} else {
 			tb.Connected = true
@@ -327,13 +330,13 @@ func (tb *TelemetryBuffer) ConnectToTelemetryService(telemetryNumRetries, teleme
 	}
 }
 
-func getTelemetryServiceDirectory() (path string, dir string) {
+func (tb *TelemetryBuffer) getTelemetryServiceDirectory() (path string, dir string) {
 	path = fmt.Sprintf("%v/%v", CniInstallDir, TelemetryServiceProcessName)
-	if exists, _ := platform.CheckIfFileExists(path); !exists {
+	if exists, _ := tb.pfinterface.CheckIfFileExists(path); !exists {
 		ex, _ := os.Executable()
 		exDir := filepath.Dir(ex)
 		path = fmt.Sprintf("%v/%v", exDir, TelemetryServiceProcessName)
-		if exists, _ = platform.CheckIfFileExists(path); !exists {
+		if exists, _ = tb.pfinterface.CheckIfFileExists(path); !exists {
 			log.Logf("Skip starting telemetry service as file didn't exist")
 			return
 		}

@@ -62,20 +62,20 @@ const (
 var sdnRemoteArpMacAddressSet = false
 
 // GetOSInfo returns OS version information.
-func GetOSInfo() string {
+func (Platform) GetOSInfo() string {
 	return "windows"
 }
 
-func GetProcessSupport() error {
+func (p Platform) GetProcessSupport() error {
 	cmd := fmt.Sprintf("Get-Process -Id %v", os.Getpid())
-	_, err := ExecutePowershellCommand(cmd)
+	_, err := p.ExecutePowershellCommand(cmd)
 	return err
 }
 
 var tickCount = syscall.NewLazyDLL("kernel32.dll").NewProc("GetTickCount64")
 
 // GetLastRebootTime returns the last time the system rebooted.
-func GetLastRebootTime() (time.Time, error) {
+func  (Platform) GetLastRebootTime() (time.Time, error) {
 	currentTime := time.Now()
 	output, _, err := tickCount.Call()
 	if errno, ok := err.(syscall.Errno); !ok || errno != 0 {
@@ -87,7 +87,7 @@ func GetLastRebootTime() (time.Time, error) {
 	return rebootTime.UTC(), nil
 }
 
-func ExecuteCommand(command string) (string, error) {
+func (Platform) ExecuteCommand(command string) (string, error) {
 	log.Printf("[Azure-Utils] %s", command)
 
 	var stderr bytes.Buffer
@@ -104,13 +104,13 @@ func ExecuteCommand(command string) (string, error) {
 	return out.String(), nil
 }
 
-func SetOutboundSNAT(subnet string) error {
+func (Platform) SetOutboundSNAT(subnet string) error {
 	return nil
 }
 
 // ClearNetworkConfiguration clears the azure-vnet.json contents.
 // This will be called only when reboot is detected - This is windows specific
-func ClearNetworkConfiguration() (bool, error) {
+func (Platform) ClearNetworkConfiguration() (bool, error) {
 	jsonStore := CNIRuntimePath + "azure-vnet.json"
 	log.Printf("Deleting the json store %s", jsonStore)
 	cmd := exec.Command("cmd", "/c", "del", jsonStore)
@@ -123,13 +123,14 @@ func ClearNetworkConfiguration() (bool, error) {
 	return true, nil
 }
 
-func KillProcessByName(processName string) {
+func (p Platform) KillProcessByName(processName string) error {
 	cmd := fmt.Sprintf("taskkill /IM %v /F", processName)
-	ExecuteCommand(cmd)
+	p.ExecuteCommand(cmd)
+	return nil
 }
 
 // ExecutePowershellCommand executes powershell command
-func ExecutePowershellCommand(command string) (string, error) {
+func (Platform) ExecutePowershellCommand(command string) (string, error) {
 	ps, err := exec.LookPath("powershell.exe")
 	if err != nil {
 		return "", fmt.Errorf("Failed to find powershell executable")
@@ -152,22 +153,22 @@ func ExecutePowershellCommand(command string) (string, error) {
 }
 
 // SetSdnRemoteArpMacAddress sets the regkey for SDNRemoteArpMacAddress needed for multitenancy
-func SetSdnRemoteArpMacAddress() error {
+func (p Platform) SetSdnRemoteArpMacAddress() error {
 	if sdnRemoteArpMacAddressSet == false {
-		result, err := ExecutePowershellCommand(GetSdnRemoteArpMacAddressCommand)
+		result, err := p.ExecutePowershellCommand(GetSdnRemoteArpMacAddressCommand)
 		if err != nil {
 			return err
 		}
 
 		// Set the reg key if not already set or has incorrect value
 		if result != SDNRemoteArpMacAddress {
-			if _, err = ExecutePowershellCommand(SetSdnRemoteArpMacAddressCommand); err != nil {
+			if _, err = p.ExecutePowershellCommand(SetSdnRemoteArpMacAddressCommand); err != nil {
 				log.Printf("Failed to set SDNRemoteArpMacAddress due to error %s", err.Error())
 				return err
 			}
 
 			log.Printf("[Azure CNS] SDNRemoteArpMacAddress regKey set successfully. Restarting hns service.")
-			if _, err := ExecutePowershellCommand(RestartHnsServiceCommand); err != nil {
+			if _, err := p.ExecutePowershellCommand(RestartHnsServiceCommand); err != nil {
 				log.Printf("Failed to Restart HNS Service due to error %s", err.Error())
 				return err
 			}
@@ -179,14 +180,14 @@ func SetSdnRemoteArpMacAddress() error {
 	return nil
 }
 
-func GetOSDetails() (map[string]string, error) {
+func (Platform) GetOSDetails() (map[string]string, error) {
 	return nil, nil
 }
 
-func GetProcessNameByID(pidstr string) (string, error) {
+func (p Platform) GetProcessNameByID(pidstr string) (string, error) {
 	pidstr = strings.Trim(pidstr, "\r\n")
 	cmd := fmt.Sprintf("Get-Process -Id %s|Format-List", pidstr)
-	out, err := ExecutePowershellCommand(cmd)
+	out, err := p.ExecutePowershellCommand(cmd)
 	if err != nil {
 		log.Printf("Process is not running. Output:%v, Error %v", out, err)
 		return "", err
@@ -210,11 +211,11 @@ func GetProcessNameByID(pidstr string) (string, error) {
 	return "", fmt.Errorf("Process not found")
 }
 
-func PrintDependencyPackageDetails() {
+func (Platform) PrintDependencyPackageDetails() {
 }
 
 // https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw
-func ReplaceFile(source, destination string) error {
+func (Platform) ReplaceFile(source, destination string) error {
 	src, err := syscall.UTF16PtrFromString(source)
 	if err != nil {
 		return err

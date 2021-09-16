@@ -7,8 +7,8 @@ import (
 	"github.com/Azure/azure-container-networking/ebtables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 )
 
 const (
@@ -54,8 +54,8 @@ func NewLinuxBridgeEndpointClient(
 }
 
 func (client *LinuxBridgeEndpointClient) AddEndpoints(epInfo *EndpointInfo) error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
 		return err
 	}
 
@@ -165,8 +165,8 @@ func (client *LinuxBridgeEndpointClient) MoveEndpointsToContainerNS(epInfo *Endp
 }
 
 func (client *LinuxBridgeEndpointClient) SetupContainerInterfaces(epInfo *EndpointInfo) error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
 		return err
 	}
 
@@ -178,13 +178,13 @@ func (client *LinuxBridgeEndpointClient) SetupContainerInterfaces(epInfo *Endpoi
 func (client *LinuxBridgeEndpointClient) ConfigureContainerInterfacesAndRoutes(epInfo *EndpointInfo) error {
 	if epInfo.IPV6Mode != "" {
 		// Enable ipv6 setting in container
-		if err := epcommon.UpdateIPV6Setting(0); err != nil {
+		if err := networkutility.UpdateIPV6Setting(0); err != nil {
 			return err
 		}
 	}
 
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
 		return err
 	}
 

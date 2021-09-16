@@ -189,11 +189,11 @@ func (nw *network) addIPv6NeighborEntryForGateway(epInfo *EndpointInfo) error {
 		if len(nw.Subnets) < 2 {
 			return fmt.Errorf("Ipv6 subnet not found in network state")
 		}
-
+		pf := platform.New()
 		// run powershell cmd to set neighbor entry for gw ip to 12-34-56-78-9a-bc
 		cmd := fmt.Sprintf("New-NetNeighbor -IPAddress %s -InterfaceAlias \"%s (%s)\" -LinkLayerAddress \"%s\"",
 			nw.Subnets[1].Gateway.String(), containerIfNamePrefix, epInfo.Id, defaultGwMac)
-		if out, err = platform.ExecutePowershellCommand(cmd); err != nil {
+		if out, err = pf.ExecutePowershellCommand(cmd); err != nil {
 			log.Errorf("[net] Adding ipv6 gw neigh entry failed %v:%v", out, err)
 			return err
 		}

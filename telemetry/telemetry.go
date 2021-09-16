@@ -94,12 +94,12 @@ type ReportManager struct {
 }
 
 // GetReport retrieves orchestrator, system, OS and Interface details and create a report structure.
-func (report *CNIReport) GetReport(name string, version string, ipamQueryURL string) {
+func (report *CNIReport) GetReport(name string, version string, ipamQueryURL string, pf *platform.Platform) {
 	report.Name = name
 	report.Version = version
 
 	report.GetSystemDetails()
-	report.GetOSDetails()
+	report.GetOSDetails(pf)
 }
 
 // SendReport will send telemetry report to HostNetAgent.

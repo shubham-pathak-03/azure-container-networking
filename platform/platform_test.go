@@ -13,21 +13,24 @@ func TestMain(m *testing.M) {
 }
 
 func TestGetLastRebootTime(t *testing.T) {
-	_, err := GetLastRebootTime()
+	p := New()
+	_, err := p.GetLastRebootTime()
 	if err != nil {
 		t.Errorf("GetLastRebootTime failed :%v", err)
 	}
 }
 
 func TestGetOSDetails(t *testing.T) {
-	_, err := GetOSDetails()
+	p := New()
+	_, err := p.GetOSDetails()
 	if err != nil {
 		t.Errorf("GetOSDetails failed :%v", err)
 	}
 }
 
 func TestGetProcessNameByID(t *testing.T) {
-	pName, err := GetProcessNameByID(strconv.Itoa(os.Getpid()))
+	p := New()
+	pName, err := p.GetProcessNameByID(strconv.Itoa(os.Getpid()))
 	if err != nil {
 		t.Errorf("GetProcessNameByID failed: %v", err)
 	}
@@ -38,7 +41,7 @@ func TestGetProcessNameByID(t *testing.T) {
 }
 
 func TestReadFileByLines(t *testing.T) {
-	lines, err := ReadFileByLines("testfiles/test1")
+	lines, err := readFileByLines("testfiles/test1")
 	if err != nil {
 		t.Errorf("ReadFileByLines failed: %v", err)
 	}
@@ -47,7 +50,7 @@ func TestReadFileByLines(t *testing.T) {
 		t.Errorf("Line count %d didn't match expected count", len(lines))
 	}
 
-	lines, err = ReadFileByLines("testfiles/test2")
+	lines, err = readFileByLines("testfiles/test2")
 	if err != nil {
 		t.Errorf("ReadFileByLines failed: %v", err)
 	}
@@ -56,7 +59,7 @@ func TestReadFileByLines(t *testing.T) {
 		t.Errorf("Line count %d didn't match expected count", len(lines))
 	}
 
-	lines, err = ReadFileByLines("testfiles/test3")
+	lines, err = readFileByLines("testfiles/test3")
 	if err != nil {
 		t.Errorf("ReadFileByLines failed: %v", err)
 	}
@@ -71,12 +74,13 @@ func TestReadFileByLines(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
-	isExist, err := CheckIfFileExists("testfiles/test1")
+	p := New()
+	isExist, err := p.CheckIfFileExists("testfiles/test1")
 	if err != nil || !isExist {
 		t.Errorf("Returned file not found %v", err)
 	}
 
-	isExist, err = CheckIfFileExists("testfiles/filenotfound")
+	isExist, err = p.CheckIfFileExists("testfiles/filenotfound")
 	if err != nil || isExist {
 		t.Errorf("Returned file found")
 	}

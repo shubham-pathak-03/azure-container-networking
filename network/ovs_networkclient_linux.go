@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-container-networking/log"
-	"github.com/Azure/azure-container-networking/network/epcommon"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
 )
 
@@ -77,7 +77,7 @@ func (client *OVSNetworkClient) CreateBridge() error {
 		}
 	}()
 
-	if err := epcommon.DisableRAForInterface(client.bridgeName); err != nil {
+	if err := networkutility.DisableRAForInterface(client.bridgeName); err != nil {
 		return err
 	}
 

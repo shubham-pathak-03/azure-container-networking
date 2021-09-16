@@ -88,8 +88,8 @@ func (report *CNIReport) GetSystemDetails() {
 }
 
 // This function  creates a report with os details(ostype, version).
-func (report *CNIReport) GetOSDetails() {
-	osInfoArr, err := platform.GetOSDetails()
+func (report *CNIReport) GetOSDetails(pf *platform.Platform) {
+	osInfoArr, err := pf.GetOSDetails()
 	if err != nil {
 		report.OSDetails = OSInfo{OSType: runtime.GOOS}
 		report.OSDetails.ErrorMessage = "GetOSDetails failed with" + err.Error()

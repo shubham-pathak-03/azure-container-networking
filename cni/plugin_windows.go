@@ -7,7 +7,8 @@ import (
 
 func removeLockFileAfterReboot(plugin *Plugin) {
 	if lockFileModTime, err := plugin.Store.GetLockFileModificationTime(); err == nil {
-		rebootTime, err := platform.GetLastRebootTime()
+		pf := platform.New()
+		rebootTime, err := pf.GetLastRebootTime()
 		log.Printf("[cni] reboot time %v storeLockFile mod time %v", rebootTime, lockFileModTime)
 		if err == nil && rebootTime.After(lockFileModTime) {
 			log.Printf("[cni] Detected Reboot")

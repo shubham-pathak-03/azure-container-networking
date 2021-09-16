@@ -10,8 +10,8 @@ import (
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/epcommon"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
+	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
 	"github.com/Azure/azure-container-networking/platform"
 )
@@ -88,9 +88,9 @@ func (client *OVSSnatClient) CreateSnatEndpoint(bridgeName string) error {
 		return err
 	}
 
-	epc := epcommon.NewEPCommon(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
 	// Create veth pair to tie one end to container and other end to linux bridge
-	if err := epc.CreateEndpoint(client.hostSnatVethName, client.containerSnatVethName); err != nil {
+	if err := netUtil.CreateEndpoint(client.hostSnatVethName, client.containerSnatVethName); err != nil {
 		log.Printf("Creating Snat Endpoint failed with error %v", err)
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -104,7 +104,7 @@ func (client *OVSSnatClient) CreateSnatEndpoint(bridgeName string) error {
 
 // AllowIPAddressesOnSnatBridge adds iptables rules  that allows only specific Private IPs via linux bridge
 func (client *OVSSnatClient) AllowIPAddressesOnSnatBridge() error {
-	if err := epcommon.AllowIPAddresses(SnatBridgeName, client.SkipAddressesFromBlock, iptables.Insert); err != nil {
+	if err := networkutility.AllowIPAddresses(SnatBridgeName, client.SkipAddressesFromBlock, iptables.Insert); err != nil {
 		log.Printf("AllowIPAddresses failed with error %v", err)
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -114,7 +114,7 @@ func (client *OVSSnatClient) AllowIPAddressesOnSnatBridge() error {
 
 // BlockIPAddressesOnSnatBridge adds iptables rules  that blocks all private IPs flowing via linux bridge
 func (client *OVSSnatClient) BlockIPAddressesOnSnatBridge() error {
-	if err := epcommon.BlockIPAddresses(SnatBridgeName, iptables.Append); err != nil {
+	if err := networkutility.BlockIPAddresses(SnatBridgeName, iptables.Append); err != nil {
 		log.Printf("AllowIPAddresses failed with error %v", err)
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -138,8 +138,8 @@ func (client *OVSSnatClient) MoveSnatEndpointToContainerNS(netnsPath string, nsI
 	Configure Routes and setup name for container veth
 **/
 func (client *OVSSnatClient) SetupSnatContainerInterface() error {
-	epc := epcommon.NewEPCommon(client.netlink)
-	if err := epc.SetupContainerInterface(client.containerSnatVethName, azureSnatIfName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	if err := netUtil.SetupContainerInterface(client.containerSnatVethName, azureSnatIfName); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
@@ -399,7 +399,7 @@ func (client *OVSSnatClient) createSnatBridge(snatBridgeIP string, hostPrimaryMa
 		return nil
 	}
 
-	if err := epcommon.DisableRAForInterface(SnatBridgeName); err != nil {
+	if err := networkutility.DisableRAForInterface(SnatBridgeName); err != nil {
 		return err
 	}
 
@@ -417,11 +417,11 @@ func (client *OVSSnatClient) createSnatBridge(snatBridgeIP string, hostPrimaryMa
 		return err
 	}
 
-	if err := epcommon.DisableRAForInterface(azureSnatVeth0); err != nil {
+	if err := networkutility.DisableRAForInterface(azureSnatVeth0); err != nil {
 		return err
 	}
 
-	if err := epcommon.DisableRAForInterface(azureSnatVeth1); err != nil {
+	if err := networkutility.DisableRAForInterface(azureSnatVeth1); err != nil {
 		return err
 	}
 
@@ -470,7 +470,8 @@ func (client *OVSSnatClient) addMasqueradeRule(snatBridgeIPWithPrefix string) er
 	Drop all vlan traffic on linux bridge
 **/
 func (client *OVSSnatClient) addVlanDropRule() error {
-	out, err := platform.ExecuteCommand(l2PreroutingEntries)
+	pf := platform.New()
+	out, err := pf.ExecuteCommand(l2PreroutingEntries)
 	if err != nil {
 		log.Printf("Error while listing ebtable rules %v", err)
 		return err
@@ -483,6 +484,6 @@ func (client *OVSSnatClient) addVlanDropRule() error {
 	}
 
 	log.Printf("Adding ebtable rule to drop vlan traffic on snat bridge %v", vlanDropAddRule)
-	_, err = platform.ExecuteCommand(vlanDropAddRule)
+	_, err = pf.ExecuteCommand(vlanDropAddRule)
 	return err
 }
