@@ -41,7 +41,7 @@ var (
 
 // To test paser, converter, and trafficAnalyzer with stored files.
 const (
-	iptableSaveFile = "../testfiles/iptablesave"
+	iptableSaveFile = "../testdata/iptablesave"
 	// stored file with json compatible form (i.e., can call json.Unmarshal)
-	npmCacheFile = "../testfiles/npmcache.json"
+	npmCacheFile = "../testdata/npmcache.json"
 )
