@@ -110,39 +110,39 @@ func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
 
 	npmNamespaceCacheRaw, err := json.Marshal(npMgr.npmNamespaceCache)
 	if err != nil {
-		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+		return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 	}
 	m[NsMap] = npmNamespaceCacheRaw
 
 	podControllerRaw, err := json.Marshal(npMgr.podController)
 	if err != nil {
-		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+		return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 	}
 	m[PodMap] = podControllerRaw
 
 	if npMgr.ipsMgr != nil {
 		listMapRaw, err := npMgr.ipsMgr.MarshalListMapJSON()
 		if err != nil {
-			return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 		}
 		m[ListMap] = listMapRaw
 
 		setMapRaw, err := npMgr.ipsMgr.MarshalSetMapJSON()
 		if err != nil {
-			return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 		}
 		m[SetMap] = setMapRaw
 	}
 
 	nodeNameRaw, err := json.Marshal(npMgr.NodeName)
 	if err != nil {
-		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+		return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 	}
 	m[NodeName] = nodeNameRaw
 
 	npmCacheRaw, err := json.Marshal(m)
 	if err != nil {
-		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+		return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
 	}
 
 	return npmCacheRaw, nil

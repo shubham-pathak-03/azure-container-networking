@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-container-networking/npm/ipsm"
+	"github.com/pkg/errors"
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	kubeinformers "k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -31,6 +32,8 @@ type Cache struct {
 	ListMap  map[string]*ipsm.Ipset
 	SetMap   map[string]*ipsm.Ipset
 }
+
+var errMarshalNPMCache = errors.New("failed to marshal NPM Cache")
 
 // CacheEncoder is used only for unit tests to test encoding and decoding Cache.
 func CacheEncoder(nodeName string) json.Marshaler {
