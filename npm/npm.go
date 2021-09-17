@@ -121,15 +121,15 @@ func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
 	m[PodMap] = podControllerRaw
 
 	if npMgr.ipsMgr != nil {
-		listMapRaw, err := npMgr.ipsMgr.MarshalListMapJSON()
-		if err != nil {
-			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
+		listMapRaw, listMapMarshalErr := npMgr.ipsMgr.MarshalListMapJSON()
+		if listMapMarshalErr != nil {
+			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, listMapMarshalErr)
 		}
 		m[ListMap] = listMapRaw
 
-		setMapRaw, err := npMgr.ipsMgr.MarshalSetMapJSON()
-		if err != nil {
-			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, err)
+		setMapRaw, setMapMarshalErr := npMgr.ipsMgr.MarshalSetMapJSON()
+		if setMapMarshalErr != nil {
+			return nil, errors.Errorf("%s: %v", errMarshalNPMCache, setMapMarshalErr)
 		}
 		m[SetMap] = setMapRaw
 	}

@@ -43,5 +43,5 @@ var (
 const (
 	iptableSaveFile = "../testfiles/iptablesave"
 	// stored file with json compatible form (i.e., can call json.Unmarshal)
-	npmCacheFile = "../testFiles/npmcache.json"
+	npmCacheFile = "../testfiles/npmcache.json"
 )
