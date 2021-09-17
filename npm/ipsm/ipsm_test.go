@@ -534,7 +534,7 @@ func TestDestroyNpmIpsets(t *testing.T) {
 
 func TestMarshalListMapJSON(t *testing.T) {
 	testListSet := "test-list"
-	var calls = []testutils.TestCmd{
+	calls := []testutils.TestCmd{
 		{Cmd: []string{"ipset", "-N", "-exist", util.GetHashedName(testListSet), "setlist"}},
 	}
 
@@ -557,7 +557,7 @@ func TestMarshalListMapJSON(t *testing.T) {
 
 func TestMarshalSetMapJSON(t *testing.T) {
 	testSet := "test-set"
-	var calls = []testutils.TestCmd{
+	calls := []testutils.TestCmd{
 		{Cmd: []string{"ipset", "-N", "-exist", util.GetHashedName(testSet), "nethash"}},
 	}
 

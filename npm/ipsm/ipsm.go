@@ -15,6 +15,7 @@ import (
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/npm/metrics"
 	"github.com/Azure/azure-container-networking/npm/util"
+	"github.com/pkg/errors"
 	utilexec "k8s.io/utils/exec"
 )
 
@@ -78,13 +79,25 @@ func NewIpsetManager(exec utilexec.Interface) *IpsetManager {
 func (ipsMgr *IpsetManager) MarshalListMapJSON() ([]byte, error) {
 	ipsMgr.Lock()
 	defer ipsMgr.Unlock()
-	return json.Marshal(ipsMgr.listMap)
+
+	listMapRaw, err := json.Marshal(ipsMgr.listMap)
+	if err != nil {
+		return nil, errors.Errorf("failed to marshal ListMap due to %v", err)
+	}
+
+	return listMapRaw, nil
 }
 
 func (ipsMgr *IpsetManager) MarshalSetMapJSON() ([]byte, error) {
 	ipsMgr.Lock()
 	defer ipsMgr.Unlock()
-	return json.Marshal(ipsMgr.setMap)
+
+	setMapRaw, err := json.Marshal(ipsMgr.setMap)
+	if err != nil {
+		return nil, errors.Errorf("failed to marshal SetMap due to %v", err)
+	}
+
+	return setMapRaw, nil
 }
 
 // Exists checks if an element exists in setMap/listMap.

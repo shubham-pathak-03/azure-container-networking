@@ -15,6 +15,7 @@ import (
 	"github.com/Azure/azure-container-networking/npm/ipsm"
 	"github.com/Azure/azure-container-networking/npm/metrics"
 	"github.com/Azure/azure-container-networking/npm/util"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -43,7 +44,13 @@ type npmNamespaceCache struct {
 func (n *npmNamespaceCache) MarshalJSON() ([]byte, error) {
 	n.Lock()
 	defer n.Unlock()
-	return json.Marshal(n.nsMap)
+
+	nsMapRaw, err := json.Marshal(n.nsMap)
+	if err != nil {
+		return nil, errors.Errorf("failed to marshal nsMap due to %v", err)
+	}
+
+	return nsMapRaw, nil
 }
 
 // NetworkPolicyManager contains informers for pod, namespace and networkpolicy.
@@ -103,36 +110,42 @@ func (npMgr *NetworkPolicyManager) MarshalJSON() ([]byte, error) {
 
 	npmNamespaceCacheRaw, err := json.Marshal(npMgr.npmNamespaceCache)
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
 	}
 	m[NsMap] = npmNamespaceCacheRaw
 
 	podControllerRaw, err := json.Marshal(npMgr.podController)
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
 	}
 	m[PodMap] = podControllerRaw
 
 	if npMgr.ipsMgr != nil {
 		listMapRaw, err := npMgr.ipsMgr.MarshalListMapJSON()
 		if err != nil {
-			return nil, err
+			return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
 		}
-		m[ListMaap] = listMapRaw
+		m[ListMap] = listMapRaw
 
 		setMapRaw, err := npMgr.ipsMgr.MarshalSetMapJSON()
 		if err != nil {
-			return nil, err
+			return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
 		}
 		m[SetMap] = setMapRaw
 	}
 
 	nodeNameRaw, err := json.Marshal(npMgr.NodeName)
 	if err != nil {
-		return nil, err
+		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
 	}
 	m[NodeName] = nodeNameRaw
-	return json.Marshal(m)
+
+	npmCacheRaw, err := json.Marshal(m)
+	if err != nil {
+		return nil, errors.Errorf("failed to marshal NPMCache: %v", err)
+	}
+
+	return npmCacheRaw, nil
 }
 
 // GetAppVersion returns network policy manager app version

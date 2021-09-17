@@ -7,13 +7,9 @@ import (
 	"time"
 
 	"github.com/Azure/azure-container-networking/npm/ipsm"
-
 	k8sversion "k8s.io/apimachinery/pkg/version"
-
 	kubeinformers "k8s.io/client-go/informers"
-
 	k8sfake "k8s.io/client-go/kubernetes/fake"
-
 	fakeexec "k8s.io/utils/exec/testing"
 )
 
@@ -23,7 +19,7 @@ const (
 	NodeName NPMCacheKey = "NodeName"
 	NsMap    NPMCacheKey = "NsMap"
 	PodMap   NPMCacheKey = "PodMap"
-	ListMaap NPMCacheKey = "ListMap"
+	ListMap  NPMCacheKey = "ListMap"
 	SetMap   NPMCacheKey = "SetMap"
 )
 

@@ -9,15 +9,12 @@ import (
 
 	"github.com/Azure/azure-container-networking/log"
 	npmconfig "github.com/Azure/azure-container-networking/npm/config"
-
 	"github.com/Azure/azure-container-networking/npm/http/api"
 	"github.com/Azure/azure-container-networking/npm/metrics"
 	"k8s.io/klog"
 
 	"github.com/gorilla/mux"
 )
-
-var DefaultHTTPListeningAddress = fmt.Sprintf("%s:%s", api.DefaultListeningIP, api.DefaultHttpPort)
 
 type NPMRestServer struct {
 	listeningAddress string
