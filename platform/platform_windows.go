@@ -87,33 +87,16 @@ func  (Platform) GetLastRebootTime() (time.Time, error) {
 	return rebootTime.UTC(), nil
 }
 
-func (Platform) ExecuteCommand(command string) (string, error) {
-	log.Printf("[Azure-Utils] %s", command)
-
-	var stderr bytes.Buffer
-	var out bytes.Buffer
-	cmd := exec.Command("cmd", "/c", command)
-	cmd.Stderr = &stderr
-	cmd.Stdout = &out
-
-	err := cmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("%s:%s", err.Error(), stderr.String())
-	}
-
-	return out.String(), nil
-}
-
 func (Platform) SetOutboundSNAT(subnet string) error {
 	return nil
 }
 
 // ClearNetworkConfiguration clears the azure-vnet.json contents.
 // This will be called only when reboot is detected - This is windows specific
-func (Platform) ClearNetworkConfiguration() (bool, error) {
+func (p Platform) ClearNetworkConfiguration() (bool, error) {
 	jsonStore := CNIRuntimePath + "azure-vnet.json"
 	log.Printf("Deleting the json store %s", jsonStore)
-	cmd := exec.Command("cmd", "/c", "del", jsonStore)
+	cmd := p.exec.Command("cmd", "/c", "del", jsonStore)
 
 	if err := cmd.Run(); err != nil {
 		log.Printf("Error deleting the json store %s", jsonStore)
@@ -130,7 +113,7 @@ func (p Platform) KillProcessByName(processName string) error {
 }
 
 // ExecutePowershellCommand executes powershell command
-func (Platform) ExecutePowershellCommand(command string) (string, error) {
+func (p Platform) ExecutePowershellCommand(command string) (string, error) {
 	ps, err := exec.LookPath("powershell.exe")
 	if err != nil {
 		return "", fmt.Errorf("Failed to find powershell executable")
@@ -138,18 +121,12 @@ func (Platform) ExecutePowershellCommand(command string) (string, error) {
 
 	log.Printf("[Azure-Utils] %s", command)
 
-	cmd := exec.Command(ps, command)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err = cmd.Run()
+	out, err := p.exec.Command(ps, command).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%s:%s", err.Error(), stderr.String())
+		return "", err
 	}
 
-	return strings.TrimSpace(stdout.String()), nil
+	return strings.TrimSpace(out), nil
 }
 
 // SetSdnRemoteArpMacAddress sets the regkey for SDNRemoteArpMacAddress needed for multitenancy

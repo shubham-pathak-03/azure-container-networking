@@ -102,6 +102,10 @@ func (plugin *ipamPlugin) Stop() {
 	log.Printf("[ipam] Plugin stopped.")
 }
 
+func (plugin *ipamPlugin) GetIO() *common.IOShim {
+	return plugin.Plugin.IO
+}
+
 //
 // Libnetwork remote IPAM API implementation
 // https://github.com/docker/libnetwork/blob/master/docs/ipam.md

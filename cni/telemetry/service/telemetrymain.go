@@ -156,12 +156,13 @@ func main() {
 
 	log.Logf("Config after setting defaults %+v", config)
 
+	io := acn.NewIOShim()
 	// Cleaning up orphan socket if present
-	tbtemp := telemetry.NewTelemetryBuffer()
+	tbtemp := telemetry.NewTelemetryBuffer(io)
 	tbtemp.Cleanup(telemetry.FdName)
 
 	for {
-		tb = telemetry.NewTelemetryBuffer()
+		tb = telemetry.NewTelemetryBuffer(io)
 
 		log.Logf("[Telemetry] Starting telemetry server")
 		err = tb.StartServer()

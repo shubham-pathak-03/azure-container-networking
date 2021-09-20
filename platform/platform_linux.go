@@ -4,7 +4,6 @@
 package platform
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -70,23 +69,6 @@ func (Platform) GetLastRebootTime() (time.Time, error) {
 	}
 
 	return rebootTime.UTC(), nil
-}
-
-func (Platform) ExecuteCommand(command string) (string, error) {
-	log.Printf("[Azure-Utils] %s", command)
-
-	var stderr bytes.Buffer
-	var out bytes.Buffer
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Stderr = &stderr
-	cmd.Stdout = &out
-
-	err := cmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("%s:%s", err.Error(), stderr.String())
-	}
-
-	return out.String(), nil
 }
 
 func (p Platform) SetOutboundSNAT(subnet string) error {

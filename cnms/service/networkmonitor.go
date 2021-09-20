@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cnms "github.com/Azure/azure-container-networking/cnms/cnmspackage"
+	"github.com/Azure/azure-container-networking/common"
 	acn "github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
@@ -114,7 +115,8 @@ func main() {
 		return
 	}
 
-	pf := platform.New()
+	io := common.NewIOShim()
+	pf := platform.New(io.Exec)
 	// Log platform information.
 	log.Printf("[monitor] Running on %v", pf.GetOSInfo())
 
@@ -137,7 +139,7 @@ func main() {
 		CNIReport:                reportManager.Report.(*telemetry.CNIReport),
 	}
 
-	tb := telemetry.NewTelemetryBuffer()
+	tb := telemetry.NewTelemetryBuffer(io)
 	tb.ConnectToTelemetryService(telemetryNumRetries, telemetryWaitTimeInMilliseconds)
 	defer tb.Close()
 

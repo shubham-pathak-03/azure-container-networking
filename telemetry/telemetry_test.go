@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-container-networking/aitelemetry"
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,7 +52,7 @@ var telemetryTests = []struct {
 }
 
 func TestMain(m *testing.M) {
-	tb := NewTelemetryBuffer()
+	tb := NewTelemetryBuffer(common.NewIOShim())
 	_ = tb.Cleanup(FdName)
 	exitCode := m.Run()
 	os.Exit(exitCode)

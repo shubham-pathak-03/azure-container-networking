@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/stretchr/testify/require"
 )
 
 const telemetryConfig = "azure-vnet-telemetry.config"
 
 func createTBServer(t *testing.T) (*TelemetryBuffer, func()) {
-	tbServer := NewTelemetryBuffer()
+	tbServer := NewTelemetryBuffer(common.NewIOShim())
 	err := tbServer.StartServer()
 	require.NoError(t, err)
 
@@ -25,7 +26,7 @@ func TestStartServer(t *testing.T) {
 	_, closeTBServer := createTBServer(t)
 	defer closeTBServer()
 
-	secondTBServer := NewTelemetryBuffer()
+	secondTBServer := NewTelemetryBuffer(common.NewIOShim())
 	err := secondTBServer.StartServer()
 	require.Error(t, err)
 }
@@ -34,7 +35,7 @@ func TestConnect(t *testing.T) {
 	_, closeTBServer := createTBServer(t)
 	defer closeTBServer()
 
-	tbClient := NewTelemetryBuffer()
+	tbClient := NewTelemetryBuffer(common.NewIOShim())
 	err := tbClient.Connect()
 	require.NoError(t, err)
 
@@ -45,7 +46,7 @@ func TestServerConnClose(t *testing.T) {
 	tbServer, closeTBServer := createTBServer(t)
 	defer closeTBServer()
 
-	tbClient := NewTelemetryBuffer()
+	tbClient := NewTelemetryBuffer(common.NewIOShim())
 	err := tbClient.Connect()
 	require.NoError(t, err)
 	defer tbClient.Close()
@@ -61,7 +62,7 @@ func TestClientConnClose(t *testing.T) {
 	_, closeTBServer := createTBServer(t)
 	defer closeTBServer()
 
-	tbClient := NewTelemetryBuffer()
+	tbClient := NewTelemetryBuffer(common.NewIOShim())
 	err := tbClient.Connect()
 	require.NoError(t, err)
 	tbClient.Close()
@@ -71,7 +72,7 @@ func TestWrite(t *testing.T) {
 	_, closeTBServer := createTBServer(t)
 	defer closeTBServer()
 
-	tbClient := NewTelemetryBuffer()
+	tbClient := NewTelemetryBuffer(common.NewIOShim())
 	err := tbClient.Connect()
 	require.NoError(t, err)
 	defer tbClient.Close()
@@ -151,6 +152,7 @@ func TestReadConfigFile(t *testing.T) {
 }
 
 func TestStartTelemetryService(t *testing.T) {
-	err := StartTelemetryService("", nil)
+	tb := NewTelemetryBuffer(common.NewIOShim())
+	err := tb.startTelemetryService("", nil)
 	require.Error(t, err)
 }

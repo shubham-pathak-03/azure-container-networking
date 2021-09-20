@@ -141,7 +141,7 @@ func (plugin *netPlugin) Start(config *common.PluginConfig) error {
 
 	// Log platform information.
 	log.Printf("[cni-net] Plugin %v version %v.", plugin.Name, plugin.Version)
-	pf := platform.New()
+	pf := platform.New(plugin.IO.Exec)
 	log.Printf("[cni-net] Running on %v", pf.GetOSInfo())
 	pf.PrintDependencyPackageDetails()
 	common.LogNetworkInterfaces()

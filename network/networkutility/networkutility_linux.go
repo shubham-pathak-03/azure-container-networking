@@ -13,6 +13,7 @@ import (
 	"github.com/Azure/azure-container-networking/netlink"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/platform"
+	utilexec "k8s.io/utils/exec"
 )
 
 /*RFC For Private Address Space: https://tools.ietf.org/html/rfc1918
@@ -46,11 +47,13 @@ func newErrorNetworkUtility(errStr string) error {
 
 type NetworkUtility struct {
 	netlink netlinkinterface.NetlinkInterface
+	exec    utilexec.Interface
 }
 
-func NewNetworkUtility(nl netlinkinterface.NetlinkInterface) NetworkUtility {
+func NewNetworkUtility(nl netlinkinterface.NetlinkInterface, exec utilexec.Interface) NetworkUtility {
 	return NetworkUtility{
 		netlink: nl,
+		exec:    exec,
 	}
 }
 
@@ -77,7 +80,7 @@ func (netUtil NetworkUtility) CreateEndpoint(hostVethName string, containerVethN
 		return newErrorNetworkUtility(err.Error())
 	}
 
-	if err := DisableRAForInterface(hostVethName); err != nil {
+	if err := netUtil.DisableRAForInterface(hostVethName); err != nil {
 		return newErrorNetworkUtility(err.Error())
 	}
 
@@ -97,7 +100,7 @@ func (netUtil NetworkUtility) SetupContainerInterface(containerVethName string, 
 		return newErrorNetworkUtility(err.Error())
 	}
 
-	if err := DisableRAForInterface(targetIfName); err != nil {
+	if err := netUtil.DisableRAForInterface(targetIfName); err != nil {
 		return newErrorNetworkUtility(err.Error())
 	}
 
@@ -122,6 +125,70 @@ func (netUtil NetworkUtility) AssignIPToInterface(interfaceName string, ipAddres
 	}
 
 	return nil
+}
+
+// EnableIPForwarding enables ip forwarding in VM and allow forwarding packets from the interface
+func (netUtil NetworkUtility) EnableIPForwarding(ifName string) error {
+	// Enable ip forwading on linux vm.
+	// sysctl -w net.ipv4.ip_forward=1
+	cmd := fmt.Sprint(enableIPForwardCmd)
+	pf := platform.New(netUtil.exec)
+	_, err := pf.ExecuteCommand(cmd)
+	if err != nil {
+		log.Printf("[net] Enable ipforwarding failed with: %v", err)
+		return err
+	}
+
+	// Append a rule in forward chain to allow forwarding from bridge
+	if err := iptables.AppendIptableRule(iptables.V4, iptables.Filter, iptables.Forward, "", iptables.Accept); err != nil {
+		log.Printf("[net] Appending forward chain rule: allow traffic coming from snatbridge failed with: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (netUtil NetworkUtility) EnableIPV6Forwarding() error {
+	cmd := fmt.Sprint(enableIPV6ForwardCmd)
+	pf := platform.New(netUtil.exec)
+	_, err := pf.ExecuteCommand(cmd)
+	if err != nil {
+		log.Printf("[net] Enable ipv6 forwarding failed with: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// This functions enables/disables ipv6 setting based on enable parameter passed.
+func (netUtil NetworkUtility) UpdateIPV6Setting(disable int) error {
+	// sysctl -w net.ipv6.conf.all.disable_ipv6=0/1
+	cmd := fmt.Sprintf(toggleIPV6Cmd, disable)
+	pf := platform.New(netUtil.exec)
+	_, err := pf.ExecuteCommand(cmd)
+	if err != nil {
+		log.Printf("[net] Update IPV6 Setting failed with: %v", err)
+	}
+
+	return err
+}
+
+func (netUtil NetworkUtility) DisableRAForInterface(ifName string) error {
+	raFilePath := fmt.Sprintf(acceptRAV6File, ifName)
+	pf := platform.New(netUtil.exec)
+	exist, err := pf.CheckIfFileExists(raFilePath)
+	if !exist {
+		log.Printf("[net] accept_ra file doesn't exist:err:%v", err)
+		return nil
+	}
+
+	cmd := fmt.Sprintf(disableRACmd, ifName)
+	out, err := pf.ExecuteCommand(cmd)
+	if err != nil {
+		log.Errorf("[net] Diabling ra failed with err: %v out: %v", err, out)
+	}
+
+	return err
 }
 
 func addOrDeleteFilterRule(bridgeName string, action string, ipAddress string, chainName string, target string) error {
@@ -194,52 +261,6 @@ func BlockIPAddresses(bridgeName string, action string) error {
 	return nil
 }
 
-// This fucntion enables ip forwarding in VM and allow forwarding packets from the interface
-func EnableIPForwarding(ifName string) error {
-	// Enable ip forwading on linux vm.
-	// sysctl -w net.ipv4.ip_forward=1
-	cmd := fmt.Sprint(enableIPForwardCmd)
-	pf := platform.New()
-	_, err := pf.ExecuteCommand(cmd)
-	if err != nil {
-		log.Printf("[net] Enable ipforwarding failed with: %v", err)
-		return err
-	}
-
-	// Append a rule in forward chain to allow forwarding from bridge
-	if err := iptables.AppendIptableRule(iptables.V4, iptables.Filter, iptables.Forward, "", iptables.Accept); err != nil {
-		log.Printf("[net] Appending forward chain rule: allow traffic coming from snatbridge failed with: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-func EnableIPV6Forwarding() error {
-	cmd := fmt.Sprint(enableIPV6ForwardCmd)
-	pf := platform.New()
-	_, err := pf.ExecuteCommand(cmd)
-	if err != nil {
-		log.Printf("[net] Enable ipv6 forwarding failed with: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// This functions enables/disables ipv6 setting based on enable parameter passed.
-func UpdateIPV6Setting(disable int) error {
-	// sysctl -w net.ipv6.conf.all.disable_ipv6=0/1
-	cmd := fmt.Sprintf(toggleIPV6Cmd, disable)
-	pf := platform.New()
-	_, err := pf.ExecuteCommand(cmd)
-	if err != nil {
-		log.Printf("[net] Update IPV6 Setting failed with: %v", err)
-	}
-
-	return err
-}
-
 // This fucntion adds rule which snat to ip passed filtered by match string.
 func AddSnatRule(match string, ip net.IP) error {
 	version := iptables.V4
@@ -249,24 +270,6 @@ func AddSnatRule(match string, ip net.IP) error {
 
 	target := fmt.Sprintf("SNAT --to %s", ip.String())
 	return iptables.InsertIptableRule(version, iptables.Nat, iptables.Postrouting, match, target)
-}
-
-func DisableRAForInterface(ifName string) error {
-	raFilePath := fmt.Sprintf(acceptRAV6File, ifName)
-	pf := platform.New()
-	exist, err := pf.CheckIfFileExists(raFilePath)
-	if !exist {
-		log.Printf("[net] accept_ra file doesn't exist:err:%v", err)
-		return nil
-	}
-
-	cmd := fmt.Sprintf(disableRACmd, ifName)
-	out, err := pf.ExecuteCommand(cmd)
-	if err != nil {
-		log.Errorf("[net] Diabling ra failed with err: %v out: %v", err, out)
-	}
-
-	return err
 }
 
 func getPrivateIPSpace() []string {

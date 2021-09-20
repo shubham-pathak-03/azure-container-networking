@@ -114,6 +114,10 @@ func (plugin *netPlugin) Stop() {
 	log.Printf("[net] Plugin stopped.")
 }
 
+func (plugin *netPlugin) GetIO() *common.IOShim {
+	return plugin.Plugin.IO
+}
+
 //
 // Libnetwork remote network API implementation
 // https://github.com/docker/libnetwork/blob/master/docs/remote.md

@@ -24,6 +24,7 @@ var version string
 func main() {
 	var config common.PluginConfig
 	config.Version = version
+	config.IO = &common.IOShim{}
 	logDirectory := "" // Sets the current location as log directory
 
 	log.SetName(name)

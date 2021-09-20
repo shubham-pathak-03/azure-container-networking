@@ -138,6 +138,9 @@ func main() {
 	// Create a channel to receive unhandled errors from the plugins.
 	config.ErrChan = make(chan error, 1)
 
+	// set ioshim
+	config.IO = common.NewIOShim()
+
 	// Create network plugin.
 	netPlugin, err := network.NewPlugin(&config)
 	if err != nil {
@@ -152,7 +155,8 @@ func main() {
 		return
 	}
 
-	pf := platform.New()
+	io := netPlugin.GetIO()
+	pf := platform.New(io.Exec)
 	err = pf.CreateDirectory(storeFileLocation)
 	if err != nil {
 		log.Errorf("Failed to create File Store directory %s, due to Error:%v", storeFileLocation, err.Error())

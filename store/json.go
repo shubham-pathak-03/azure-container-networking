@@ -15,6 +15,7 @@ import (
 
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/platform"
+	"k8s.io/utils/exec"
 )
 
 const (
@@ -166,7 +167,7 @@ func (kvs *jsonFileStore) flush() error {
 		return fmt.Errorf("temp file close failed with: %v", err)
 	}
 
-	pf := platform.New()
+	pf := platform.New(exec.New())
 	// atomic replace
 	if err = pf.ReplaceFile(tmpFileName, kvs.fileName); err != nil {
 		return fmt.Errorf("rename temp file to state file failed:%v", err)

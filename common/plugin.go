@@ -14,6 +14,7 @@ type Plugin struct {
 	Options map[string]interface{}
 	ErrChan chan error
 	Store   store.KeyValueStore
+	IO      *IOShim
 }
 
 // Plugin base interface.
@@ -22,6 +23,7 @@ type PluginApi interface {
 	Stop()
 	GetOption(string) interface{}
 	SetOption(string, interface{})
+	GetIO() *IOShim
 }
 
 // Network internal interface.
@@ -40,6 +42,7 @@ type PluginConfig struct {
 	Listener *Listener
 	ErrChan  chan error
 	Store    store.KeyValueStore
+	IO       *IOShim
 }
 
 // NewPlugin creates a new Plugin object.
@@ -55,6 +58,7 @@ func NewPlugin(name, version string) (*Plugin, error) {
 func (plugin *Plugin) Initialize(config *PluginConfig) error {
 	plugin.ErrChan = config.ErrChan
 	plugin.Store = config.Store
+	plugin.IO = config.IO
 
 	return nil
 }

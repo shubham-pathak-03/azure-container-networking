@@ -165,7 +165,7 @@ func main() {
 	}
 
 	cniReport := reportManager.Report.(*telemetry.CNIReport)
-
+	config.IO = common.NewIOShim()
 	netPlugin, err := network.NewPlugin(name, &config, &nns.GrpcClient{})
 	if err != nil {
 		log.Printf("Failed to create network plugin, err:%v.\n", err)
@@ -177,7 +177,7 @@ func main() {
 
 	if cniCmd != cni.CmdVersion {
 		log.Printf("CNI_COMMAND environment variable set to %s", cniCmd)
-		pf := platform.New()
+		pf := platform.New(netPlugin.IO.Exec)
 		cniReport.GetReport(pluginName, version, ipamQueryURL, pf)
 
 		upTime, err := pf.GetLastRebootTime()
@@ -188,7 +188,7 @@ func main() {
 		// CNI Acquires lock
 		if err = netPlugin.Plugin.InitializeKeyValueStore(&config); err != nil {
 			log.Errorf("Failed to initialize key-value store of network plugin, err:%v.\n", err)
-			tb := telemetry.NewTelemetryBuffer()
+			tb := telemetry.NewTelemetryBuffer(config.IO)
 			if tberr := tb.Connect(); tberr == nil {
 				reportPluginError(reportManager, tb, err)
 				tb.Close()
@@ -216,7 +216,7 @@ func main() {
 
 		// Start telemetry process if not already started. This should be done inside lock, otherwise multiple process
 		// end up creating/killing telemetry process results in undesired state.
-		tb = telemetry.NewTelemetryBuffer()
+		tb = telemetry.NewTelemetryBuffer(config.IO)
 		tb.ConnectToTelemetryService(telemetryNumRetries, telemetryWaitTimeInMilliseconds)
 		defer tb.Close()
 

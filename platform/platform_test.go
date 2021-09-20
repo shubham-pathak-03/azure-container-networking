@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	testutils "github.com/Azure/azure-container-networking/test/utils"
 )
 
 func TestMain(m *testing.M) {
@@ -13,7 +15,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestGetLastRebootTime(t *testing.T) {
-	p := New()
+	fexec := testutils.GetFakeExecWithScripts([]testutils.TestCmd{})
+	p := New(fexec)
 	_, err := p.GetLastRebootTime()
 	if err != nil {
 		t.Errorf("GetLastRebootTime failed :%v", err)
@@ -21,7 +24,8 @@ func TestGetLastRebootTime(t *testing.T) {
 }
 
 func TestGetOSDetails(t *testing.T) {
-	p := New()
+	fexec := testutils.GetFakeExecWithScripts([]testutils.TestCmd{})
+	p := New(fexec)
 	_, err := p.GetOSDetails()
 	if err != nil {
 		t.Errorf("GetOSDetails failed :%v", err)
@@ -29,7 +33,8 @@ func TestGetOSDetails(t *testing.T) {
 }
 
 func TestGetProcessNameByID(t *testing.T) {
-	p := New()
+	fexec := testutils.GetFakeExecWithScripts([]testutils.TestCmd{})
+	p := New(fexec)
 	pName, err := p.GetProcessNameByID(strconv.Itoa(os.Getpid()))
 	if err != nil {
 		t.Errorf("GetProcessNameByID failed: %v", err)
@@ -74,7 +79,8 @@ func TestReadFileByLines(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
-	p := New()
+	fexec := testutils.GetFakeExecWithScripts([]testutils.TestCmd{})
+	p := New(fexec)
 	isExist, err := p.CheckIfFileExists("testfiles/test1")
 	if err != nil || !isExist {
 		t.Errorf("Returned file not found %v", err)

@@ -67,13 +67,13 @@ type Buffer struct {
 }
 
 // NewTelemetryBuffer - create a new TelemetryBuffer
-func NewTelemetryBuffer() *TelemetryBuffer {
+func NewTelemetryBuffer(io *common.IOShim) *TelemetryBuffer {
 	var tb TelemetryBuffer
 
 	tb.data = make(chan interface{}, MaxNumReports)
 	tb.cancel = make(chan bool, 1)
 	tb.connections = make([]net.Conn, 0)
-	tb.pfinterface = platform.New()
+	tb.pfinterface = platform.New(io.Exec)
 
 	return &tb
 }

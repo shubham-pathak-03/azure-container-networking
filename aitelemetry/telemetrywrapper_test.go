@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/platform"
+	testutils "github.com/Azure/azure-container-networking/test/utils"
 )
 
 var (
@@ -29,11 +30,21 @@ func TestMain(m *testing.M) {
 		fmt.Printf("TestST LogDir configuration succeeded\n")
 	}
 
-	pf := platform.New()
+	metadataFile := filepath.FromSlash(os.Getenv("TEMP")) + "\\azuremetadata.json"
+	calls := []testutils.TestCmd{
+		{Cmd: []string{"sh", "-c", "cp metadata_test.json /tmp/azuremetadata.json"}},
+		{Cmd: []string{"sh", "-c", fmt.Sprintf("copy metadata_test.json %s", metadataFile)}},
+		{Cmd: []string{"sh", "-c", "rm /tmp/azuremetadata.json"}},
+		{Cmd: []string{"sh", "-c", fmt.Sprintf("copy metadata_test.json %s", metadataFile)}},
+	}
+
+	fexec := testutils.GetFakeExecWithScripts(calls)
+	defer testutils.VerifyMainCalls(fexec, calls)
+
+	pf := platform.New(fexec)
 	if runtime.GOOS == "linux" {
 		pf.ExecuteCommand("cp metadata_test.json /tmp/azuremetadata.json")
 	} else {
-		metadataFile := filepath.FromSlash(os.Getenv("TEMP")) + "\\azuremetadata.json"
 		cmd := fmt.Sprintf("copy metadata_test.json %s", metadataFile)
 		pf.ExecuteCommand(cmd)
 	}
@@ -57,7 +68,6 @@ func TestMain(m *testing.M) {
 	if runtime.GOOS == "linux" {
 		pf.ExecuteCommand("rm /tmp/azuremetadata.json")
 	} else {
-		metadataFile := filepath.FromSlash(os.Getenv("TEMP")) + "\\azuremetadata.json"
 		cmd := fmt.Sprintf("del %s", metadataFile)
 		pf.ExecuteCommand(cmd)
 	}

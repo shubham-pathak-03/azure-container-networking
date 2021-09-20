@@ -1,6 +1,7 @@
 package testingutils
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -49,6 +50,19 @@ func VerifyCalls(t *testing.T, fexec *fakeexec.FakeExec, calls []TestCmd) {
 	err := recover()
 	require.Nil(t, err)
 	require.Equalf(t, len(calls), fexec.CommandCalls, "Number of exec calls mismatched, expected [%d], actual [%d]", fexec.CommandCalls, len(calls))
+}
+
+func VerifyMainCalls(fexec *fakeexec.FakeExec, calls []TestCmd) interface{} {
+	err := recover()
+	if err != nil {
+		return err
+	}
+
+	execError := fmt.Errorf("Number of exec calls mismatched, expected [%d], actual [%d]", fexec.CommandCalls, len(calls))
+	if len(calls) != fexec.CommandCalls {
+		return execError
+	}
+	return nil
 }
 
 func isCurrentUserRoot() bool {

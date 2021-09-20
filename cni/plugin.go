@@ -192,7 +192,7 @@ func (plugin *Plugin) UninitializeKeyValueStore(force bool) error {
 func (plugin *Plugin) IsSafeToRemoveLock(processName string) (bool, error) {
 	if plugin != nil && plugin.Store != nil {
 		// check if get process command supported
-		pf := platform.New()
+		pf := platform.New(plugin.IO.Exec)
 		if cmdErr := pf.GetProcessSupport(); cmdErr != nil {
 			log.Errorf("Get process cmd not supported. Error %v", cmdErr)
 			return false, cmdErr
