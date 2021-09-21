@@ -18,8 +18,7 @@ func NewSnatClient(client *OVSEndpointClient, snatBridgeIP string, localIP strin
 			snatBridgeIP,
 			client.hostPrimaryMac,
 			epInfo.DNS.Servers,
-			client.netlink,
-			client.ovsctlClient,
+			client.ioShim,
 		)
 	}
 }
@@ -47,11 +46,12 @@ func AddSnatEndpointRules(client *OVSEndpointClient) error {
 		}
 
 		// Add route for 169.254.169.54 in host via azure0, otherwise it will route via snat bridge
-		if err := AddStaticRoute(client.netlink, ovssnat.ImdsIP, client.bridgeName); err != nil {
+		if err := AddStaticRoute(client.ioShim.Netlink, ovssnat.ImdsIP, client.bridgeName); err != nil {
 			return err
 		}
 
-		if err := networkutility.EnableIPForwarding(ovssnat.SnatBridgeName); err != nil {
+		netUtil := networkutility.NewNetworkUtility(client.ioShim)
+		if err := netUtil.EnableIPForwarding(ovssnat.SnatBridgeName); err != nil {
 			return err
 		}
 

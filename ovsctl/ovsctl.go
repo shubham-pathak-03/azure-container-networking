@@ -32,25 +32,6 @@ func newErrorOvsctl(errorString string) error {
 	return fmt.Errorf("%w: %v", errorMockOvsctl, errorString)
 }
 
-type OvsInterface interface {
-	// TODO: remove this interface after platform calls are mocked
-	CreateOVSBridge(bridgeName string) error
-	DeleteOVSBridge(bridgeName string) error
-	AddPortOnOVSBridge(hostIfName string, bridgeName string, vlanID int) error
-	GetOVSPortNumber(interfaceName string) (string, error)
-	AddVMIpAcceptRule(bridgeName string, primaryIP string, mac string) error
-	AddArpSnatRule(bridgeName string, mac string, macHex string, ofport string) error
-	AddIPSnatRule(bridgeName string, ip net.IP, vlanID int, port string, mac string, outport string) error
-	AddArpDnatRule(bridgeName string, port string, mac string) error
-	AddFakeArpReply(bridgeName string, ip net.IP) error
-	AddArpReplyRule(bridgeName string, port string, ip net.IP, mac string, vlanid int, mode string) error
-	AddMacDnatRule(bridgeName string, port string, ip net.IP, mac string, vlanid int, containerPort string) error
-	DeleteArpReplyRule(bridgeName string, port string, ip net.IP, vlanid int)
-	DeleteIPSnatRule(bridgeName string, port string)
-	DeleteMacDnatRule(bridgeName string, port string, ip net.IP, vlanid int)
-	DeletePortFromOVS(bridgeName string, interfaceName string) error
-}
-
 type Ovsctl struct {
 	platform *platform.Platform
 }

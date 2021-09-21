@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 
-	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
 )
@@ -29,14 +29,14 @@ type OVSInfraVnetClient struct {
 	hostInfraVethName      string
 	ContainerInfraVethName string
 	containerInfraMac      string
-	netlink                netlinkinterface.NetlinkInterface
+	ioShim                 *common.IOShim
 }
 
-func NewInfraVnetClient(hostIfName string, contIfName string, nl netlinkinterface.NetlinkInterface) OVSInfraVnetClient {
+func NewInfraVnetClient(hostIfName string, contIfName string, ioShim *common.IOShim) OVSInfraVnetClient {
 	infraVnetClient := OVSInfraVnetClient{
 		hostInfraVethName:      hostIfName,
 		ContainerInfraVethName: contIfName,
-		netlink:                nl,
+		ioShim:                 ioShim,
 	}
 
 	log.Printf("Initialize new infravnet client %+v", infraVnetClient)
@@ -45,13 +45,13 @@ func NewInfraVnetClient(hostIfName string, contIfName string, nl netlinkinterfac
 }
 
 func (client *OVSInfraVnetClient) CreateInfraVnetEndpoint(bridgeName string) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.CreateEndpoint(client.hostInfraVethName, client.ContainerInfraVethName); err != nil {
 		log.Printf("Creating infraep failed with error %v", err)
 		return err
 	}
 
-	ovs := ovsctl.NewOvsctl()
+	ovs := ovsctl.NewOvsctl(client.ioShim.Exec)
 	log.Printf("[ovs] Adding port %v master %v.", client.hostInfraVethName, bridgeName)
 	if err := ovs.AddPortOnOVSBridge(client.hostInfraVethName, bridgeName, 0); err != nil {
 		log.Printf("Adding infraveth to ovsbr failed with error %v", err)
@@ -75,7 +75,7 @@ func (client *OVSInfraVnetClient) CreateInfraVnetRules(
 	hostPrimaryMac string,
 	hostPort string) error {
 
-	ovs := ovsctl.NewOvsctl()
+	ovs := ovsctl.NewOvsctl(client.ioShim.Exec)
 
 	infraContainerPort, err := ovs.GetOVSPortNumber(client.hostInfraVethName)
 	if err != nil {
@@ -100,7 +100,7 @@ func (client *OVSInfraVnetClient) CreateInfraVnetRules(
 
 func (client *OVSInfraVnetClient) MoveInfraEndpointToContainerNS(netnsPath string, nsID uintptr) error {
 	log.Printf("[ovs] Setting link %v netns %v.", client.ContainerInfraVethName, netnsPath)
-	err := client.netlink.SetLinkNetNs(client.ContainerInfraVethName, nsID)
+	err := client.ioShim.Netlink.SetLinkNetNs(client.ContainerInfraVethName, nsID)
 	if err != nil {
 		return newErrorOVSInfraVnetClient(err.Error())
 	}
@@ -108,7 +108,7 @@ func (client *OVSInfraVnetClient) MoveInfraEndpointToContainerNS(netnsPath strin
 }
 
 func (client *OVSInfraVnetClient) SetupInfraVnetContainerInterface() error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.SetupContainerInterface(client.ContainerInfraVethName, azureInfraIfName); err != nil {
 		return newErrorOVSInfraVnetClient(err.Error())
 	}
@@ -120,7 +120,7 @@ func (client *OVSInfraVnetClient) SetupInfraVnetContainerInterface() error {
 
 func (client *OVSInfraVnetClient) ConfigureInfraVnetContainerInterface(infraIP net.IPNet) error {
 	log.Printf("[ovs] Adding IP address %v to link %v.", infraIP.String(), client.ContainerInfraVethName)
-	err := client.netlink.AddIPAddress(client.ContainerInfraVethName, infraIP.IP, &infraIP)
+	err := client.ioShim.Netlink.AddIPAddress(client.ContainerInfraVethName, infraIP.IP, &infraIP)
 	if err != nil {
 		return newErrorOVSInfraVnetClient(err.Error())
 	}
@@ -132,7 +132,7 @@ func (client *OVSInfraVnetClient) DeleteInfraVnetRules(
 	infraIP net.IPNet,
 	hostPort string) {
 
-	ovs := ovsctl.NewOvsctl()
+	ovs := ovsctl.NewOvsctl(client.ioShim.Exec)
 
 	log.Printf("[ovs] Deleting MAC DNAT rule for infravnet IP address %v", infraIP.IP.String())
 	ovs.DeleteMacDnatRule(bridgeName, hostPort, infraIP.IP, 0)
@@ -154,7 +154,7 @@ func (client *OVSInfraVnetClient) DeleteInfraVnetRules(
 
 func (client *OVSInfraVnetClient) DeleteInfraVnetEndpoint() error {
 	log.Printf("[ovs] Deleting Infra veth pair %v.", client.hostInfraVethName)
-	err := client.netlink.DeleteLink(client.hostInfraVethName)
+	err := client.ioShim.Netlink.DeleteLink(client.hostInfraVethName)
 	if err != nil {
 		log.Printf("[ovs] Failed to delete veth pair %v: %v.", client.hostInfraVethName, err)
 		return newErrorOVSInfraVnetClient(err.Error())

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/platform"
 )
@@ -33,7 +33,7 @@ type TransparentEndpointClient struct {
 	containerMac      net.HardwareAddr
 	hostVethMac       net.HardwareAddr
 	mode              string
-	netlink           netlinkinterface.NetlinkInterface
+	ioShim            *common.IOShim
 }
 
 func NewTransparentEndpointClient(
@@ -41,7 +41,7 @@ func NewTransparentEndpointClient(
 	hostVethName string,
 	containerVethName string,
 	mode string,
-	nl netlinkinterface.NetlinkInterface,
+	ioShim *common.IOShim,
 ) *TransparentEndpointClient {
 
 	client := &TransparentEndpointClient{
@@ -51,15 +51,15 @@ func NewTransparentEndpointClient(
 		containerVethName: containerVethName,
 		hostPrimaryMac:    extIf.MacAddress,
 		mode:              mode,
-		netlink:           nl,
+		ioShim:            ioShim,
 	}
 
 	return client
 }
 
-func setArpProxy(ifName string) error {
+func (client *TransparentEndpointClient) setArpProxy(ifName string) error {
 	cmd := fmt.Sprintf("echo 1 > /proc/sys/net/ipv4/conf/%v/proxy_arp", ifName)
-	pf := platform.New()
+	pf := platform.New(client.ioShim.Exec)
 	_, err := pf.ExecuteCommand(cmd)
 	return err
 }
@@ -67,13 +67,13 @@ func setArpProxy(ifName string) error {
 func (client *TransparentEndpointClient) AddEndpoints(epInfo *EndpointInfo) error {
 	if _, err := net.InterfaceByName(client.hostVethName); err == nil {
 		log.Printf("Deleting old host veth %v", client.hostVethName)
-		if err = client.netlink.DeleteLink(client.hostVethName); err != nil {
+		if err = client.ioShim.Netlink.DeleteLink(client.hostVethName); err != nil {
 			log.Printf("[net] Failed to delete old hostveth %v: %v.", client.hostVethName, err)
 			return newErrorTransparentEndpointClient(err.Error())
 		}
 	}
 
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
@@ -106,13 +106,13 @@ func (client *TransparentEndpointClient) AddEndpointRules(epInfo *EndpointInfo) 
 		log.Printf("[net] Adding route for the ip %v", ipNet.String())
 		routeInfo.Dst = ipNet
 		routeInfoList = append(routeInfoList, routeInfo)
-		if err := addRoutes(client.netlink, client.hostVethName, routeInfoList); err != nil {
+		if err := addRoutes(client.ioShim.Netlink, client.hostVethName, routeInfoList); err != nil {
 			return newErrorTransparentEndpointClient(err.Error())
 		}
 	}
 
 	log.Printf("calling setArpProxy for %v", client.hostVethName)
-	if err := setArpProxy(client.hostVethName); err != nil {
+	if err := client.setArpProxy(client.hostVethName); err != nil {
 		log.Printf("setArpProxy failed with: %v", err)
 		return err
 	}
@@ -131,7 +131,7 @@ func (client *TransparentEndpointClient) DeleteEndpointRules(ep *endpoint) {
 		log.Printf("[net] Deleting route for the ip %v", ipNet.String())
 		routeInfo.Dst = ipNet
 		routeInfoList = append(routeInfoList, routeInfo)
-		err = deleteRoutes(client.netlink, client.hostVethName, routeInfoList)
+		err = deleteRoutes(client.ioShim.Netlink, client.hostVethName, routeInfoList)
 		if err != nil {
 			log.Printf("[net] Failed to delete route for the ip %v: %v", ipNet.String(), err)
 		}
@@ -141,7 +141,7 @@ func (client *TransparentEndpointClient) DeleteEndpointRules(ep *endpoint) {
 func (client *TransparentEndpointClient) MoveEndpointsToContainerNS(epInfo *EndpointInfo, nsID uintptr) error {
 	// Move the container interface to container's network namespace.
 	log.Printf("[net] Setting link %v netns %v.", client.containerVethName, epInfo.NetNsPath)
-	if err := client.netlink.SetLinkNetNs(client.containerVethName, nsID); err != nil {
+	if err := client.ioShim.Netlink.SetLinkNetNs(client.containerVethName, nsID); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
 
@@ -149,7 +149,7 @@ func (client *TransparentEndpointClient) MoveEndpointsToContainerNS(epInfo *Endp
 }
 
 func (client *TransparentEndpointClient) SetupContainerInterfaces(epInfo *EndpointInfo) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (client *TransparentEndpointClient) SetupContainerInterfaces(epInfo *Endpoi
 }
 
 func (client *TransparentEndpointClient) ConfigureContainerInterfacesAndRoutes(epInfo *EndpointInfo) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
@@ -173,7 +173,7 @@ func (client *TransparentEndpointClient) ConfigureContainerInterfacesAndRoutes(e
 			Scope:    netlink.RT_SCOPE_LINK,
 			Protocol: netlink.RTPROT_KERNEL,
 		}
-		if err := deleteRoutes(client.netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
+		if err := deleteRoutes(client.ioShim.Netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
 			return newErrorTransparentEndpointClient(err.Error())
 		}
 	}
@@ -185,7 +185,7 @@ func (client *TransparentEndpointClient) ConfigureContainerInterfacesAndRoutes(e
 		Dst:   *virtualGwNet,
 		Scope: netlink.RT_SCOPE_LINK,
 	}
-	if err := addRoutes(client.netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
+	if err := addRoutes(client.ioShim.Netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}
 
@@ -196,13 +196,13 @@ func (client *TransparentEndpointClient) ConfigureContainerInterfacesAndRoutes(e
 		Dst: dstIP,
 		Gw:  virtualGwIP,
 	}
-	if err := addRoutes(client.netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
+	if err := addRoutes(client.ioShim.Netlink, client.containerVethName, []RouteInfo{routeInfo}); err != nil {
 		return err
 	}
 
 	// arp -s 169.254.1.1 e3:45:f4:ac:34:12 - add static arp entry for virtualgwip to hostveth interface mac
 	log.Printf("[net] Adding static arp for IP address %v and MAC %v in Container namespace", virtualGwNet.String(), client.hostVethMac)
-	err := client.netlink.AddOrRemoveStaticArp(netlink.ADD, client.containerVethName, virtualGwNet.IP, client.hostVethMac, false)
+	err := client.ioShim.Netlink.AddOrRemoveStaticArp(netlink.ADD, client.containerVethName, virtualGwNet.IP, client.hostVethMac, false)
 	if err != nil {
 		return newErrorTransparentEndpointClient(err.Error())
 	}

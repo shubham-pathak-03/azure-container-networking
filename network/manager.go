@@ -11,7 +11,6 @@ import (
 	cnms "github.com/Azure/azure-container-networking/cnms/cnmspackage"
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
-	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/platform"
 	"github.com/Azure/azure-container-networking/store"
 )
@@ -57,7 +56,7 @@ type networkManager struct {
 	TimeStamp          time.Time
 	ExternalInterfaces map[string]*externalInterface
 	store              store.KeyValueStore
-	netlink            netlinkinterface.NetlinkInterface
+	ioShim             *common.IOShim
 	sync.Mutex
 }
 
@@ -85,10 +84,10 @@ type NetworkManager interface {
 }
 
 // Creates a new network manager.
-func NewNetworkManager(nl netlinkinterface.NetlinkInterface) (NetworkManager, error) {
+func NewNetworkManager(ioShim *common.IOShim) (NetworkManager, error) {
 	nm := &networkManager{
 		ExternalInterfaces: make(map[string]*externalInterface),
-		netlink:            nl,
+		ioShim:             ioShim,
 	}
 
 	return nm, nil
@@ -139,7 +138,7 @@ func (nm *networkManager) restore(isRehydrationRequired bool) error {
 	if isRehydrationRequired {
 		modTime, err := nm.store.GetModificationTime()
 		if err == nil {
-			pf := platform.New()
+			pf := platform.New(nm.ioShim.Exec)
 			rebootTime, err := pf.GetLastRebootTime()
 			log.Printf("[net] reboot time %v store mod time %v", rebootTime, modTime)
 			if err == nil && rebootTime.After(modTime) {
@@ -334,7 +333,7 @@ func (nm *networkManager) CreateEndpoint(cli apipaClient, networkID string, epIn
 		}
 	}
 
-	_, err = nw.newEndpoint(cli, nm.netlink, epInfo)
+	_, err = nw.newEndpoint(cli, nm.ioShim, epInfo)
 	if err != nil {
 		return err
 	}
@@ -357,7 +356,7 @@ func (nm *networkManager) DeleteEndpoint(cli apipaClient, networkID string, endp
 		return err
 	}
 
-	err = nw.deleteEndpoint(cli, nm.netlink, endpointID)
+	err = nw.deleteEndpoint(cli, nm.ioShim, endpointID)
 	if err != nil {
 		return err
 	}

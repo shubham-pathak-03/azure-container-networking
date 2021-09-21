@@ -71,7 +71,7 @@ func (f *MockNetlink) AddOrRemoveStaticArp(int, string, net.IP, net.HardwareAddr
 	return f.error()
 }
 
-func (f *MockNetlink) AddIPAddress(string, net.IP, *net.IPNet) error {
+func (f *MockNetlink) AddIPAddress(ifName string, ipAddress net.IP, ipNet *net.IPNet) error {
 	return f.error()
 }
 

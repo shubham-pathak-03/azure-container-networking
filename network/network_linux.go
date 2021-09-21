@@ -15,7 +15,6 @@ import (
 	"github.com/Azure/azure-container-networking/netlink"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/network/networkutility"
-	"github.com/Azure/azure-container-networking/ovsctl"
 	"github.com/Azure/azure-container-networking/platform"
 	"golang.org/x/sys/unix"
 )
@@ -130,9 +129,9 @@ func (nm *networkManager) deleteNetworkImpl(nw *network) error {
 	var networkClient NetworkClient
 
 	if nw.VlanId != 0 {
-		networkClient = NewOVSClient(nw.extIf.BridgeName, nw.extIf.Name, ovsctl.NewOvsctl())
+		networkClient = NewOVSClient(nw.extIf.BridgeName, nw.extIf.Name, nm.ioShim)
 	} else {
-		networkClient = NewLinuxBridgeClient(nw.extIf.BridgeName, nw.extIf.Name, NetworkInfo{}, nm.netlink)
+		networkClient = NewLinuxBridgeClient(nw.extIf.BridgeName, nw.extIf.Name, NetworkInfo{}, nm.ioShim)
 	}
 
 	// Disconnect the interface if this was the last network using it.
@@ -146,7 +145,7 @@ func (nm *networkManager) deleteNetworkImpl(nw *network) error {
 //  SaveIPConfig saves the IP configuration of an interface.
 func (nm *networkManager) saveIPConfig(hostIf *net.Interface, extIf *externalInterface) error {
 	// Save the default routes on the interface.
-	routes, err := nm.netlink.GetIPRoute(&netlink.Route{Dst: &net.IPNet{}, LinkIndex: hostIf.Index})
+	routes, err := nm.ioShim.Netlink.GetIPRoute(&netlink.Route{Dst: &net.IPNet{}, LinkIndex: hostIf.Index})
 	if err != nil {
 		log.Printf("[net] Failed to query routes: %v.", err)
 		return err
@@ -181,7 +180,7 @@ func (nm *networkManager) saveIPConfig(hostIf *net.Interface, extIf *externalInt
 
 		log.Printf("[net] Deleting IP address %v from interface %v.", ipNet, hostIf.Name)
 
-		err = nm.netlink.DeleteIPAddress(hostIf.Name, ipAddr, ipNet)
+		err = nm.ioShim.Netlink.DeleteIPAddress(hostIf.Name, ipAddr, ipNet)
 		if err != nil {
 			break
 		}
@@ -206,8 +205,8 @@ func getMajorVersion(version string) (int, error) {
 	return 0, fmt.Errorf("[net] Error getting major version")
 }
 
-func isGreaterOrEqaulUbuntuVersion(versionToMatch int) bool {
-	pf := platform.New()
+func (nm *networkManager) isGreaterOrEqaulUbuntuVersion(versionToMatch int) bool {
+	pf := platform.New(nm.ioShim.Exec)
 	osInfo, err := pf.GetOSDetails()
 	if err != nil {
 		log.Printf("[net] Unable to get OS Details: %v", err)
@@ -235,11 +234,11 @@ func isGreaterOrEqaulUbuntuVersion(versionToMatch int) bool {
 	return false
 }
 
-func readDnsInfo(ifName string) (DNSInfo, error) {
+func (nm *networkManager) readDnsInfo(ifName string) (DNSInfo, error) {
 	var dnsInfo DNSInfo
 
 	cmd := fmt.Sprintf("systemd-resolve --status %s", ifName)
-	pf := platform.New()
+	pf := platform.New(nm.ioShim.Exec)
 	out, err := pf.ExecuteCommand(cmd)
 	if err != nil {
 		return dnsInfo, err
@@ -281,8 +280,8 @@ func readDnsInfo(ifName string) (DNSInfo, error) {
 	return dnsInfo, nil
 }
 
-func saveDnsConfig(extIf *externalInterface) error {
-	dnsInfo, err := readDnsInfo(extIf.Name)
+func (nm *networkManager) saveDnsConfig(extIf *externalInterface) error {
+	dnsInfo, err := nm.readDnsInfo(extIf.Name)
 	if err != nil || len(dnsInfo.Servers) == 0 || dnsInfo.Suffix == "" {
 		log.Printf("[net] Failed to read dns info %+v from interface %v: %v", dnsInfo, extIf.Name, err)
 		return err
@@ -300,7 +299,7 @@ func (nm *networkManager) applyIPConfig(extIf *externalInterface, targetIf *net.
 	for _, addr := range extIf.IPAddresses {
 		log.Printf("[net] Adding IP address %v to interface %v.", addr, targetIf.Name)
 
-		err := nm.netlink.AddIPAddress(targetIf.Name, addr.IP, addr)
+		err := nm.ioShim.Netlink.AddIPAddress(targetIf.Name, addr.IP, addr)
 		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "file exists") {
 			log.Printf("[net] Failed to add IP address %v: %v.", addr, err)
 			return err
@@ -313,7 +312,7 @@ func (nm *networkManager) applyIPConfig(extIf *externalInterface, targetIf *net.
 
 		log.Printf("[net] Adding IP route %+v.", route)
 
-		err := nm.netlink.AddIPRoute((*netlink.Route)(route))
+		err := nm.ioShim.Netlink.AddIPRoute((*netlink.Route)(route))
 		if err != nil {
 			log.Printf("[net] Failed to add IP route %v: %v.", route, err)
 			return err
@@ -323,7 +322,7 @@ func (nm *networkManager) applyIPConfig(extIf *externalInterface, targetIf *net.
 	return nil
 }
 
-func applyDnsConfig(extIf *externalInterface, ifName string) error {
+func (nm *networkManager) applyDnsConfig(extIf *externalInterface, ifName string) error {
 	var (
 		setDnsList string
 		err        error
@@ -339,7 +338,7 @@ func applyDnsConfig(extIf *externalInterface, ifName string) error {
 			buf := fmt.Sprintf("--set-dns=%s", server)
 			setDnsList = setDnsList + " " + buf
 		}
-		pf := platform.New()
+		pf := platform.New(nm.ioShim.Exec)
 		if setDnsList != "" {
 			cmd := fmt.Sprintf("systemd-resolve --interface=%s%s", ifName, setDnsList)
 			_, err = pf.ExecuteCommand(cmd)
@@ -388,9 +387,9 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 
 	opt, _ := nwInfo.Options[genericData].(map[string]interface{})
 	if opt != nil && opt[VlanIDKey] != nil {
-		networkClient = NewOVSClient(bridgeName, extIf.Name, ovsctl.NewOvsctl())
+		networkClient = NewOVSClient(bridgeName, extIf.Name, nm.ioShim)
 	} else {
-		networkClient = NewLinuxBridgeClient(bridgeName, extIf.Name, *nwInfo, nm.netlink)
+		networkClient = NewLinuxBridgeClient(bridgeName, extIf.Name, *nwInfo, nm.ioShim)
 	}
 
 	// Check if the bridge already exists.
@@ -428,15 +427,15 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 	/*
 		If custom dns server is updated, VM needs reboot for the change to take effect.
 	*/
-	isGreaterOrEqualUbuntu17 := isGreaterOrEqaulUbuntuVersion(ubuntuVersion17)
+	isGreaterOrEqualUbuntu17 := nm.isGreaterOrEqaulUbuntuVersion(ubuntuVersion17)
 	isSystemdResolvedActive := false
 	if isGreaterOrEqualUbuntu17 {
-		pf := platform.New()
+		pf := platform.New(nm.ioShim.Exec)
 		// Don't copy dns servers if systemd-resolved isn't available
 		if _, cmderr := pf.ExecuteCommand("systemctl status systemd-resolved"); cmderr == nil {
 			isSystemdResolvedActive = true
 			log.Printf("[net] Saving dns config from %v", extIf.Name)
-			if err = saveDnsConfig(extIf); err != nil {
+			if err = nm.saveDnsConfig(extIf); err != nil {
 				log.Printf("[net] Failed to save dns config: %v", err)
 				return err
 			}
@@ -445,7 +444,7 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 
 	// External interface down.
 	log.Printf("[net] Setting link %v state down.", hostIf.Name)
-	err = nm.netlink.SetLinkState(hostIf.Name, false)
+	err = nm.ioShim.Netlink.SetLinkState(hostIf.Name, false)
 	if err != nil {
 		return err
 	}
@@ -458,14 +457,14 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 
 	// External interface up.
 	log.Printf("[net] Setting link %v state up.", hostIf.Name)
-	err = nm.netlink.SetLinkState(hostIf.Name, true)
+	err = nm.ioShim.Netlink.SetLinkState(hostIf.Name, true)
 	if err != nil {
 		return err
 	}
 
 	// Bridge up.
 	log.Printf("[net] Setting link %v state up.", bridgeName)
-	err = nm.netlink.SetLinkState(bridgeName, true)
+	err = nm.ioShim.Netlink.SetLinkState(bridgeName, true)
 	if err != nil {
 		return err
 	}
@@ -494,7 +493,7 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 	if isGreaterOrEqualUbuntu17 && isSystemdResolvedActive {
 		log.Printf("[net] Applying dns config on %v", bridgeName)
 
-		if err = applyDnsConfig(extIf, bridgeName); err != nil {
+		if err = nm.applyDnsConfig(extIf, bridgeName); err != nil {
 			log.Printf("[net] Failed to apply DNS configuration: %v.", err)
 			return err
 		}
@@ -504,7 +503,7 @@ func (nm *networkManager) connectExternalInterface(extIf *externalInterface, nwI
 
 	if nwInfo.IPV6Mode == IPV6Nat {
 		// adds pod cidr gateway ip to bridge
-		if err = addIpv6NatGateway(nm.netlink, nwInfo); err != nil {
+		if err = nm.addIpv6NatGateway(nm.ioShim.Netlink, nwInfo); err != nil {
 			log.Errorf("[net] Adding IPv6 Nat Gateway failed:%v", err)
 			return err
 		}
@@ -583,7 +582,7 @@ func (nm *networkManager) addBridgeRoutes(bridgeName string, routes []RouteInfo)
 			LinkIndex: ifIndex,
 		}
 
-		if err := nm.netlink.AddIPRoute(nlRoute); err != nil {
+		if err := nm.ioShim.Netlink.AddIPRoute(nlRoute); err != nil {
 			if !strings.Contains(strings.ToLower(err.Error()), "file exists") {
 				return fmt.Errorf("Failed to add %+v to host interface with error: %v", nlRoute, err)
 			}
@@ -597,7 +596,7 @@ func (nm *networkManager) addBridgeRoutes(bridgeName string, routes []RouteInfo)
 }
 
 // Add ipv6 nat gateway IP on bridge
-func addIpv6NatGateway(nl netlinkinterface.NetlinkInterface, nwInfo *NetworkInfo) error {
+func (nm *networkManager) addIpv6NatGateway(nl netlinkinterface.NetlinkInterface, nwInfo *NetworkInfo) error {
 	log.Printf("[net] Adding ipv6 nat gateway on azure bridge")
 	for _, subnetInfo := range nwInfo.Subnets {
 		if subnetInfo.Family == platform.AfINET6 {
@@ -605,7 +604,7 @@ func addIpv6NatGateway(nl netlinkinterface.NetlinkInterface, nwInfo *NetworkInfo
 				IP:   subnetInfo.Gateway,
 				Mask: subnetInfo.Prefix.Mask,
 			}}
-			netUtil := networkutility.NewNetworkUtility(nl)
+			netUtil := networkutility.NewNetworkUtility(nm.ioShim)
 			err := netUtil.AssignIPToInterface(nwInfo.BridgeName, ipAddr)
 			if err != nil {
 				return newErrorNetworkManager(err.Error())

@@ -9,11 +9,11 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/ebtables"
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
-	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
 	"github.com/Azure/azure-container-networking/platform"
@@ -44,8 +44,7 @@ type OVSSnatClient struct {
 	localIP                string
 	snatBridgeIP           string
 	SkipAddressesFromBlock []string
-	netlink                netlinkinterface.NetlinkInterface
-	ovsctlClient           ovsctl.OvsInterface
+	ioShim                 *common.IOShim
 }
 
 func NewSnatClient(hostIfName string,
@@ -54,8 +53,7 @@ func NewSnatClient(hostIfName string,
 	snatBridgeIP string,
 	hostPrimaryMac string,
 	skipAddressesFromBlock []string,
-	nl netlinkinterface.NetlinkInterface,
-	ovsctlClient ovsctl.OvsInterface,
+	ioShim *common.IOShim,
 ) OVSSnatClient {
 	log.Printf("Initialize new snat client")
 	snatClient := OVSSnatClient{
@@ -64,8 +62,7 @@ func NewSnatClient(hostIfName string,
 		localIP:               localIP,
 		snatBridgeIP:          snatBridgeIP,
 		hostPrimaryMac:        hostPrimaryMac,
-		netlink:               nl,
-		ovsctlClient:          ovsctlClient,
+		ioShim:                ioShim,
 	}
 
 	snatClient.SkipAddressesFromBlock = append(snatClient.SkipAddressesFromBlock, skipAddressesFromBlock...)
@@ -94,14 +91,14 @@ func (client *OVSSnatClient) CreateSnatEndpoint(bridgeName string) error {
 		return err
 	}
 
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	// Create veth pair to tie one end to container and other end to linux bridge
 	if err := netUtil.CreateEndpoint(client.hostSnatVethName, client.containerSnatVethName); err != nil {
 		log.Printf("Creating Snat Endpoint failed with error %v", err)
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	err := client.netlink.SetLinkMaster(client.hostSnatVethName, SnatBridgeName)
+	err := client.ioShim.Netlink.SetLinkMaster(client.hostSnatVethName, SnatBridgeName)
 	if err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -133,7 +130,7 @@ func (client *OVSSnatClient) BlockIPAddressesOnSnatBridge() error {
 **/
 func (client *OVSSnatClient) MoveSnatEndpointToContainerNS(netnsPath string, nsID uintptr) error {
 	log.Printf("[ovs] Setting link %v netns %v.", client.containerSnatVethName, netnsPath)
-	err := client.netlink.SetLinkNetNs(client.containerSnatVethName, nsID)
+	err := client.ioShim.Netlink.SetLinkNetNs(client.containerSnatVethName, nsID)
 	if err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -144,7 +141,7 @@ func (client *OVSSnatClient) MoveSnatEndpointToContainerNS(netnsPath string, nsI
 	Configure Routes and setup name for container veth
 **/
 func (client *OVSSnatClient) SetupSnatContainerInterface() error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.SetupContainerInterface(client.containerSnatVethName, azureSnatIfName); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -210,7 +207,7 @@ func (client *OVSSnatClient) AllowInboundFromHostToNC() error {
 
 	// Add static arp entry for localIP to prevent arp going out of VM
 	log.Printf("Adding static arp entry for ip %s mac %s", containerIP, snatContainerVeth.HardwareAddr.String())
-	err = client.netlink.AddOrRemoveStaticArp(netlink.ADD, SnatBridgeName, containerIP, snatContainerVeth.HardwareAddr, false)
+	err = client.ioShim.Netlink.AddOrRemoveStaticArp(netlink.ADD, SnatBridgeName, containerIP, snatContainerVeth.HardwareAddr, false)
 	if err != nil {
 		log.Printf("AllowInboundFromHostToNC: Error adding static arp entry for ip %s mac %s: %v", containerIP, snatContainerVeth.HardwareAddr.String(), err)
 		return newErrorOVSSnatClient(err.Error())
@@ -231,7 +228,7 @@ func (client *OVSSnatClient) DeleteInboundFromHostToNC() error {
 
 	// Remove static arp entry added for container local IP
 	log.Printf("Removing static arp entry for ip %s ", containerIP)
-	err = client.netlink.AddOrRemoveStaticArp(netlink.REMOVE, SnatBridgeName, containerIP, nil, false)
+	err = client.ioShim.Netlink.AddOrRemoveStaticArp(netlink.REMOVE, SnatBridgeName, containerIP, nil, false)
 	if err != nil {
 		log.Printf("AllowInboundFromHostToNC: Error removing static arp entry for ip %s: %v", containerIP, err)
 	}
@@ -289,7 +286,7 @@ func (client *OVSSnatClient) AllowInboundFromNCToHost() error {
 
 	// Add static arp entry for localIP to prevent arp going out of VM
 	log.Printf("Adding static arp entry for ip %s mac %s", containerIP, snatContainerVeth.HardwareAddr.String())
-	err = client.netlink.AddOrRemoveStaticArp(netlink.ADD, SnatBridgeName, containerIP, snatContainerVeth.HardwareAddr, false)
+	err = client.ioShim.Netlink.AddOrRemoveStaticArp(netlink.ADD, SnatBridgeName, containerIP, snatContainerVeth.HardwareAddr, false)
 	if err != nil {
 		log.Printf("AllowInboundFromNCToHost: Error adding static arp entry for ip %s mac %s: %v", containerIP, snatContainerVeth.HardwareAddr.String(), err)
 	}
@@ -309,7 +306,7 @@ func (client *OVSSnatClient) DeleteInboundFromNCToHost() error {
 
 	// Remove static arp entry added for container local IP
 	log.Printf("Removing static arp entry for ip %s ", containerIP)
-	err = client.netlink.AddOrRemoveStaticArp(netlink.REMOVE, SnatBridgeName, containerIP, nil, false)
+	err = client.ioShim.Netlink.AddOrRemoveStaticArp(netlink.REMOVE, SnatBridgeName, containerIP, nil, false)
 	if err != nil {
 		log.Printf("DeleteInboundFromNCToHost: Error removing static arp entry for ip %s: %v", containerIP, err)
 	}
@@ -324,7 +321,7 @@ func (client *OVSSnatClient) DeleteInboundFromNCToHost() error {
 func (client *OVSSnatClient) ConfigureSnatContainerInterface() error {
 	log.Printf("[ovs] Adding IP address %v to link %v.", client.localIP, client.containerSnatVethName)
 	ip, intIpAddr, _ := net.ParseCIDR(client.localIP)
-	err := client.netlink.AddIPAddress(client.containerSnatVethName, ip, intIpAddr)
+	err := client.ioShim.Netlink.AddIPAddress(client.containerSnatVethName, ip, intIpAddr)
 	if err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
@@ -333,7 +330,7 @@ func (client *OVSSnatClient) ConfigureSnatContainerInterface() error {
 
 func (client *OVSSnatClient) DeleteSnatEndpoint() error {
 	log.Printf("[ovs] Deleting snat veth pair %v.", client.hostSnatVethName)
-	err := client.netlink.DeleteLink(client.hostSnatVethName)
+	err := client.ioShim.Netlink.DeleteLink(client.hostSnatVethName)
 	if err != nil {
 		log.Printf("[ovs] Failed to delete veth pair %v: %v.", client.hostSnatVethName, err)
 		return newErrorOVSSnatClient(err.Error())
@@ -349,7 +346,7 @@ func (client *OVSSnatClient) setBridgeMac(hostPrimaryMac string) error {
 		return err
 	}
 
-	if err = client.netlink.SetLinkAddress(SnatBridgeName, hwAddr); err != nil {
+	if err = client.ioShim.Netlink.SetLinkAddress(SnatBridgeName, hwAddr); err != nil {
 		log.Errorf("Error while setting macaddr on bridge: %s error:%+v", hwAddr.String(), err)
 	}
 	return err
@@ -382,7 +379,7 @@ func (client *OVSSnatClient) createSnatBridge(snatBridgeIP string, hostPrimaryMa
 			},
 		}
 
-		if err := client.netlink.AddLink(&link); err != nil {
+		if err := client.ioShim.Netlink.AddLink(&link); err != nil {
 			return newErrorOVSSnatClient(err.Error())
 		}
 	}
@@ -404,8 +401,8 @@ func (client *OVSSnatClient) createSnatBridge(snatBridgeIP string, hostPrimaryMa
 		log.Printf("Azure snat veth already exists")
 		return nil
 	}
-
-	if err := networkutility.DisableRAForInterface(SnatBridgeName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
+	if err := netUtil.DisableRAForInterface(SnatBridgeName); err != nil {
 		return err
 	}
 
@@ -417,46 +414,47 @@ func (client *OVSSnatClient) createSnatBridge(snatBridgeIP string, hostPrimaryMa
 		PeerName: azureSnatVeth1,
 	}
 
-	err = client.netlink.AddLink(&vethLink)
+	err = client.ioShim.Netlink.AddLink(&vethLink)
 	if err != nil {
 		log.Printf("[net] Failed to create veth pair, err:%v.", err)
 		return err
 	}
 
-	if err := networkutility.DisableRAForInterface(azureSnatVeth0); err != nil {
+	if err := netUtil.DisableRAForInterface(azureSnatVeth0); err != nil {
 		return err
 	}
 
-	if err := networkutility.DisableRAForInterface(azureSnatVeth1); err != nil {
+	if err := netUtil.DisableRAForInterface(azureSnatVeth1); err != nil {
 		return err
 	}
 
 	log.Printf("Assigning %v on snat bridge", snatBridgeIP)
 
 	ip, addr, _ := net.ParseCIDR(snatBridgeIP)
-	err = client.netlink.AddIPAddress(SnatBridgeName, ip, addr)
+	err = client.ioShim.Netlink.AddIPAddress(SnatBridgeName, ip, addr)
 	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "file exists") {
 		log.Printf("[net] Failed to add IP address %v: %v.", addr, err)
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	if err := client.netlink.SetLinkState(SnatBridgeName, true); err != nil {
+	if err := client.ioShim.Netlink.SetLinkState(SnatBridgeName, true); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	if err := client.netlink.SetLinkState(azureSnatVeth0, true); err != nil {
+	if err := client.ioShim.Netlink.SetLinkState(azureSnatVeth0, true); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	if err := client.netlink.SetLinkMaster(azureSnatVeth0, SnatBridgeName); err != nil {
+	if err := client.ioShim.Netlink.SetLinkMaster(azureSnatVeth0, SnatBridgeName); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	if err := client.netlink.SetLinkState(azureSnatVeth1, true); err != nil {
+	if err := client.ioShim.Netlink.SetLinkState(azureSnatVeth1, true); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
-	if err := client.ovsctlClient.AddPortOnOVSBridge(azureSnatVeth1, mainInterface, 0); err != nil {
+	ovsctlClient := ovsctl.NewOvsctl(client.ioShim.Exec)
+	if err := ovsctlClient.AddPortOnOVSBridge(azureSnatVeth1, mainInterface, 0); err != nil {
 		return newErrorOVSSnatClient(err.Error())
 	}
 
@@ -476,7 +474,7 @@ func (client *OVSSnatClient) addMasqueradeRule(snatBridgeIPWithPrefix string) er
 	Drop all vlan traffic on linux bridge
 **/
 func (client *OVSSnatClient) addVlanDropRule() error {
-	pf := platform.New()
+	pf := platform.New(client.ioShim.Exec)
 	out, err := pf.ExecuteCommand(l2PreroutingEntries)
 	if err != nil {
 		log.Printf("Error while listing ebtable rules %v", err)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/ovsctl"
@@ -24,7 +25,8 @@ func newErrorOVSNetworkClient(errStr string) error {
 type OVSNetworkClient struct {
 	bridgeName        string
 	hostInterfaceName string
-	ovsctlClient      ovsctl.OvsInterface
+	ioShim            *common.IOShim
+	ovsctlClient      ovsctl.Ovsctl
 }
 
 const (
@@ -67,11 +69,12 @@ func (client *OVSNetworkClient) AddRoutes(nwInfo *NetworkInfo, interfaceName str
 	return nil
 }
 
-func NewOVSClient(bridgeName, hostInterfaceName string, ovsctlClient ovsctl.OvsInterface) *OVSNetworkClient {
+func NewOVSClient(bridgeName, hostInterfaceName string, ioShim *common.IOShim) *OVSNetworkClient {
 	ovsClient := &OVSNetworkClient{
 		bridgeName:        bridgeName,
 		hostInterfaceName: hostInterfaceName,
-		ovsctlClient:      ovsctlClient,
+		ioShim:            ioShim,
+		ovsctlClient:      ovsctl.NewOvsctl(ioShim.Exec),
 	}
 
 	return ovsClient
@@ -90,7 +93,8 @@ func (client *OVSNetworkClient) CreateBridge() error {
 		}
 	}()
 
-	if err := networkutility.DisableRAForInterface(client.bridgeName); err != nil {
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
+	if err := netUtil.DisableRAForInterface(client.bridgeName); err != nil {
 		return err
 	}
 

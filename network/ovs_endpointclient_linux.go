@@ -6,8 +6,8 @@ package network
 import (
 	"net"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
-	"github.com/Azure/azure-container-networking/network/netlinkinterface"
 	"github.com/Azure/azure-container-networking/network/networkutility"
 	"github.com/Azure/azure-container-networking/network/ovsinfravnet"
 	"github.com/Azure/azure-container-networking/network/ovssnat"
@@ -29,8 +29,8 @@ type OVSEndpointClient struct {
 	allowInboundFromHostToNC bool
 	allowInboundFromNCToHost bool
 	enableSnatForDns         bool
-	netlink                  netlinkinterface.NetlinkInterface
-	ovsctlClient             ovsctl.OvsInterface
+	ioShim                   *common.IOShim
+	ovsctlClient             ovsctl.Ovsctl
 }
 
 const (
@@ -45,8 +45,7 @@ func NewOVSEndpointClient(
 	containerVethName string,
 	vlanid int,
 	localIP string,
-	nl netlinkinterface.NetlinkInterface,
-	ovs ovsctl.OvsInterface) *OVSEndpointClient {
+	io *common.IOShim) *OVSEndpointClient {
 
 	client := &OVSEndpointClient{
 		bridgeName:               nw.extIf.BridgeName,
@@ -60,8 +59,8 @@ func NewOVSEndpointClient(
 		allowInboundFromHostToNC: epInfo.AllowInboundFromHostToNC,
 		allowInboundFromNCToHost: epInfo.AllowInboundFromNCToHost,
 		enableSnatForDns:         epInfo.EnableSnatForDns,
-		netlink:                  nl,
-		ovsctlClient:             ovs,
+		ioShim:                   io,
+		ovsctlClient:             ovsctl.NewOvsctl(io.Exec),
 	}
 
 	NewInfraVnetClient(client, epInfo.Id[:7])
@@ -71,7 +70,7 @@ func NewOVSEndpointClient(
 }
 
 func (client *OVSEndpointClient) AddEndpoints(epInfo *EndpointInfo) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.CreateEndpoint(client.hostVethName, client.containerVethName); err != nil {
 		return err
 	}
@@ -183,7 +182,7 @@ func (client *OVSEndpointClient) DeleteEndpointRules(ep *endpoint) {
 func (client *OVSEndpointClient) MoveEndpointsToContainerNS(epInfo *EndpointInfo, nsID uintptr) error {
 	// Move the container interface to container's network namespace.
 	log.Printf("[ovs] Setting link %v netns %v.", client.containerVethName, epInfo.NetNsPath)
-	if err := client.netlink.SetLinkNetNs(client.containerVethName, nsID); err != nil {
+	if err := client.ioShim.Netlink.SetLinkNetNs(client.containerVethName, nsID); err != nil {
 		return err
 	}
 
@@ -195,7 +194,7 @@ func (client *OVSEndpointClient) MoveEndpointsToContainerNS(epInfo *EndpointInfo
 }
 
 func (client *OVSEndpointClient) SetupContainerInterfaces(epInfo *EndpointInfo) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.SetupContainerInterface(client.containerVethName, epInfo.IfName); err != nil {
 		return err
 	}
@@ -210,7 +209,7 @@ func (client *OVSEndpointClient) SetupContainerInterfaces(epInfo *EndpointInfo) 
 }
 
 func (client *OVSEndpointClient) ConfigureContainerInterfacesAndRoutes(epInfo *EndpointInfo) error {
-	netUtil := networkutility.NewNetworkUtility(client.netlink)
+	netUtil := networkutility.NewNetworkUtility(client.ioShim)
 	if err := netUtil.AssignIPToInterface(client.containerVethName, epInfo.IPAddresses); err != nil {
 		return err
 	}
@@ -223,12 +222,12 @@ func (client *OVSEndpointClient) ConfigureContainerInterfacesAndRoutes(epInfo *E
 		return err
 	}
 
-	return addRoutes(client.netlink, client.containerVethName, epInfo.Routes)
+	return addRoutes(client.ioShim.Netlink, client.containerVethName, epInfo.Routes)
 }
 
 func (client *OVSEndpointClient) DeleteEndpoints(ep *endpoint) error {
 	log.Printf("[ovs] Deleting veth pair %v %v.", ep.HostIfName, ep.IfName)
-	err := client.netlink.DeleteLink(ep.HostIfName)
+	err := client.ioShim.Netlink.DeleteLink(ep.HostIfName)
 	if err != nil {
 		log.Printf("[ovs] Failed to delete veth pair %v: %v.", ep.HostIfName, err)
 		return err

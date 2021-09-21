@@ -10,10 +10,10 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
 	"github.com/Azure/azure-container-networking/network/netlinkinterface"
-	"github.com/Azure/azure-container-networking/ovsctl"
 )
 
 const (
@@ -44,7 +44,7 @@ func ConstructEndpointID(containerID string, _ string, ifName string) (string, s
 }
 
 // newEndpointImpl creates a new endpoint in the network.
-func (nw *network) newEndpointImpl(_ apipaClient, nl netlinkinterface.NetlinkInterface, epInfo *EndpointInfo) (*endpoint, error) {
+func (nw *network) newEndpointImpl(_ apipaClient, ioShim *common.IOShim, epInfo *EndpointInfo) (*endpoint, error) {
 	var containerIf *net.Interface
 	var ns *Namespace
 	var ep *endpoint
@@ -97,14 +97,13 @@ func (nw *network) newEndpointImpl(_ apipaClient, nl netlinkinterface.NetlinkInt
 			contIfName,
 			vlanid,
 			localIP,
-			nl,
-			ovsctl.NewOvsctl())
+			ioShim)
 	} else if nw.Mode != opModeTransparent {
 		log.Printf("Bridge client")
-		epClient = NewLinuxBridgeEndpointClient(nw.extIf, hostIfName, contIfName, nw.Mode, nl)
+		epClient = NewLinuxBridgeEndpointClient(nw.extIf, hostIfName, contIfName, nw.Mode, ioShim)
 	} else {
 		log.Printf("Transparent client")
-		epClient = NewTransparentEndpointClient(nw.extIf, hostIfName, contIfName, nw.Mode, nl)
+		epClient = NewTransparentEndpointClient(nw.extIf, hostIfName, contIfName, nw.Mode, ioShim)
 	}
 
 	// Cleanup on failure.
@@ -217,7 +216,7 @@ func (nw *network) newEndpointImpl(_ apipaClient, nl netlinkinterface.NetlinkInt
 }
 
 // deleteEndpointImpl deletes an existing endpoint from the network.
-func (nw *network) deleteEndpointImpl(_ apipaClient, nl netlinkinterface.NetlinkInterface, ep *endpoint) error {
+func (nw *network) deleteEndpointImpl(_ apipaClient, ioShim *common.IOShim, ep *endpoint) error {
 	var epClient EndpointClient
 
 	// Delete the veth pair by deleting one of the peer interfaces.
@@ -225,11 +224,11 @@ func (nw *network) deleteEndpointImpl(_ apipaClient, nl netlinkinterface.Netlink
 	// entering the container netns and hence works both for CNI and CNM.
 	if ep.VlanID != 0 {
 		epInfo := ep.getInfo()
-		epClient = NewOVSEndpointClient(nw, epInfo, ep.HostIfName, "", ep.VlanID, ep.LocalIP, nl, ovsctl.NewOvsctl())
+		epClient = NewOVSEndpointClient(nw, epInfo, ep.HostIfName, "", ep.VlanID, ep.LocalIP, ioShim)
 	} else if nw.Mode != opModeTransparent {
-		epClient = NewLinuxBridgeEndpointClient(nw.extIf, ep.HostIfName, "", nw.Mode, nl)
+		epClient = NewLinuxBridgeEndpointClient(nw.extIf, ep.HostIfName, "", nw.Mode, ioShim)
 	} else {
-		epClient = NewTransparentEndpointClient(nw.extIf, ep.HostIfName, "", nw.Mode, nl)
+		epClient = NewTransparentEndpointClient(nw.extIf, ep.HostIfName, "", nw.Mode, ioShim)
 	}
 
 	epClient.DeleteEndpointRules(ep)
@@ -441,12 +440,12 @@ func (nm *networkManager) updateRoutes(existingEp *EndpointInfo, targetEp *Endpo
 
 	}
 
-	err := deleteRoutes(nm.netlink, existingEp.IfName, tobeDeletedRoutes)
+	err := deleteRoutes(nm.ioShim.Netlink, existingEp.IfName, tobeDeletedRoutes)
 	if err != nil {
 		return err
 	}
 
-	err = addRoutes(nm.netlink, existingEp.IfName, tobeAddedRoutes)
+	err = addRoutes(nm.ioShim.Netlink, existingEp.IfName, tobeAddedRoutes)
 	if err != nil {
 		return err
 	}

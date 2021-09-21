@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/netlink"
@@ -50,10 +51,10 @@ type NetworkUtility struct {
 	exec    utilexec.Interface
 }
 
-func NewNetworkUtility(nl netlinkinterface.NetlinkInterface, exec utilexec.Interface) NetworkUtility {
+func NewNetworkUtility(io *common.IOShim) NetworkUtility {
 	return NetworkUtility{
-		netlink: nl,
-		exec:    exec,
+		netlink: io.Netlink,
+		exec:    io.Exec,
 	}
 }
 
