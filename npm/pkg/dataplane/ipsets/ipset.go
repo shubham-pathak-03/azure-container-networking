@@ -143,7 +143,7 @@ func getSetKind(setType SetType) SetKind {
 	case CIDRBlocks:
 		return HashSet
 	case NameSpace:
-		return HashSet
+		return HashSet // TODO says its a list set in comment above?
 	case NamedPorts:
 		return HashSet
 	case KeyLabelOfPod:
