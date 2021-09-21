@@ -15,6 +15,7 @@ type IPSetManager struct {
 	// Map with Key as IPSet name to to emulate set
 	// and value as struct{} for minimal memory consumption
 	dirtyCaches map[string]struct{}
+	deleteCache map[string]string // name and hashed name
 	sync.Mutex
 }
 
@@ -23,36 +24,47 @@ func (iMgr *IPSetManager) exists(name string) bool {
 	return ok
 }
 
-func NewIPSetManager() IPSetManager {
-	return IPSetManager{
-		setMap:      make(map[string]*IPSet),
-		dirtyCaches: make(map[string]struct{}),
+func NewIPSetManager() *IPSetManager {
+	iMgr := IPSetManager{
+		setMap: make(map[string]*IPSet),
 	}
+	iMgr.resetCaches()
+	return &iMgr
+}
+
+func (iMgr *IPSetManager) resetCaches() {
+	iMgr.dirtyCaches = make(map[string]struct{})
+	iMgr.deleteCache = make(map[string]string)
+}
+
+func (iMgr *IPSetManager) updateMapsOnDelete(set *IPSet) {
+	iMgr.deleteCache[set.Name] = set.HashedName
+	delete(iMgr.dirtyCaches, set.Name)
+	delete(iMgr.setMap, set.Name)
 }
 
 func (iMgr *IPSetManager) updateDirtyCache(setName string) {
 	set, exists := iMgr.setMap[setName] // check if the Set exists
-	if !exists {
+	if !exists {                        // TODO (hunter) shouldn't this never happen?
 		return
 	}
 
 	// If set is not referenced in netpol then ignore the update
-	if len(set.NetPolReference) == 0 && len(set.SelectorReference) == 0 {
-		return
-	}
+	// TODO commenting for testing
+	// TODO need to delete the set in the kernel once the references reach 0
+	// if len(set.NetPolReference) == 0 && len(set.SelectorReference) == 0 {
+	// 	return
+	// }
 
 	iMgr.dirtyCaches[set.Name] = struct{}{}
+	delete(iMgr.deleteCache, set.Name)
 	if set.Kind == ListSet {
 		// TODO check if we will need to add all the member ipsets
 		// also to the dirty cache list
 		for _, member := range set.MemberIPSets {
-			iMgr.dirtyCaches[member.Name] = struct{}{}
+			iMgr.updateDirtyCache(member.Name)
 		}
 	}
-}
-
-func (iMgr *IPSetManager) clearDirtyCache() {
-	iMgr.dirtyCaches = make(map[string]struct{})
 }
 
 func (iMgr *IPSetManager) CreateIPSet(set *IPSet) error {
@@ -66,12 +78,14 @@ func (iMgr *IPSetManager) createIPSet(set *IPSet) error {
 	if iMgr.exists(set.Name) {
 		// ipset already exists
 		// we should calculate a diff if the members are different
+		// (hunter) diff doesn't matter for correct Linux implementation
 		return nil
 	}
 
 	// append the cache if dataplane specific function
 	// return nil as error
 	iMgr.setMap[set.Name] = set
+	iMgr.updateDirtyCache(set.Name) // TODO remove eventually?
 	metrics.IncNumIPSets()
 	return nil
 }
@@ -257,11 +271,12 @@ func (iMgr *IPSetManager) DeleteList(name string) error {
 		return npmerrors.Errorf(npmerrors.AppendIPSet, false, fmt.Sprintf("member ipset %s does not exist", set.Name))
 	}
 
-	if !set.CanBeDeleted() {
+	if !set.CanBeDeleted() { // does it have any members, etc?
 		return npmerrors.Errorf(npmerrors.DeleteIPSet, false, fmt.Sprintf("ipset %s cannot be deleted", set.Name))
 	}
 
-	delete(iMgr.setMap, name)
+	iMgr.updateMapsOnDelete(set)
+	metrics.DeleteIPSet(name)
 	return nil
 }
 
@@ -276,7 +291,9 @@ func (iMgr *IPSetManager) DeleteSet(name string) error {
 	if !set.CanBeDeleted() {
 		return npmerrors.Errorf(npmerrors.DeleteIPSet, false, fmt.Sprintf("ipset %s cannot be deleted", set.Name))
 	}
-	delete(iMgr.setMap, name)
+
+	iMgr.updateMapsOnDelete(set)
+	metrics.DeleteIPSet(name)
 	return nil
 }
 
@@ -290,6 +307,6 @@ func (iMgr *IPSetManager) ApplyIPSets(networkID string) error {
 		return err
 	}
 
-	iMgr.clearDirtyCache()
+	iMgr.resetCaches()
 	return nil
 }
