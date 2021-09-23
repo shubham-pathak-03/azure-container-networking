@@ -44,10 +44,7 @@ func (iMgr *IPSetManager) updateMapsOnDelete(set *IPSet) {
 }
 
 func (iMgr *IPSetManager) updateDirtyCache(setName string) {
-	set, exists := iMgr.setMap[setName] // check if the Set exists
-	if !exists {                        // TODO (hunter) shouldn't this never happen?
-		return
-	}
+	set := iMgr.setMap[setName]
 
 	// If set is not referenced in netpol then ignore the update
 	// TODO commenting for testing
