@@ -85,7 +85,7 @@ func (iMgr *IPSetManager) createIPSet(set *IPSet) error {
 	// append the cache if dataplane specific function
 	// return nil as error
 	iMgr.setMap[set.Name] = set
-	iMgr.updateDirtyCache(set.Name) // TODO remove eventually?
+	iMgr.updateDirtyCache(set.Name)
 	metrics.IncNumIPSets()
 	return nil
 }

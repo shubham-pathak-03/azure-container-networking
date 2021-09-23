@@ -28,6 +28,17 @@ func assertExecExists() {
 	}
 }
 
+// TODO make corresponding function in generic ipsetmanager
+func destroyNPMIPSets() error {
+	// called on failure or when NPM is created
+	// so no ipset cache. need to use ipset list like in ipsm.go
+
+	// create restore file that flushes all sets, then deletes all sets
+	// technically don't need to flush a hashset
+
+	return nil
+}
+
 // don't need networkID
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	// DEBUGGING)
@@ -132,7 +143,7 @@ func (file *ipsetRestoreFile) flush(setName string) {
 }
 
 func (file *ipsetRestoreFile) delete(setName string) {
-	file.flush(setName)
+	// NOTE assume that the set is empty and isn't referenced in any list sets (should make checks in generic ipsetmanager)
 	file.destroy(setName)
 }
 
