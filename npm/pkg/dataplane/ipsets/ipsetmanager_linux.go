@@ -15,12 +15,6 @@ const maxRetryCount = 1
 
 var linuxExec kexec.Interface
 
-func assertExecExists() {
-	if linuxExec == nil {
-		linuxExec = kexec.New()
-	}
-}
-
 // TODO make corresponding function in generic ipsetmanager
 func destroyNPMIPSets() error {
 	// called on failure or when NPM is created
@@ -36,9 +30,9 @@ func destroyNPMIPSets() error {
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	// DEBUGGING)
 	fmt.Println("DIRTY CACHE")
-	fmt.Println(iMgr.dirtyCaches)
+	fmt.Println(iMgr.additionOrUpdateDirtyCache)
 	fmt.Println("DELETE CACHE")
-	fmt.Println(iMgr.deleteCache)
+	// TODO calc sets to-be-deleted
 
 	fileCreator := createSaveFile(iMgr)
 
@@ -46,41 +40,47 @@ func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	fmt.Println("RESTORE FILE")
 	fmt.Println(fileCreator.ToString())
 
-	assertExecExists() // TODO remove if using osexec
-
-	// restore (retry until success)
-	for {
-		err := fileCreator.RunWithFile(linuxExec.Command(util.Ipset, util.IpsetRestoreFlag)) // TODO could retry from line that fails
-		if err == nil {
-			return nil
-		}
-		fileCreator.IncRetryCount()
-		if fileCreator.GetRetryCount() >= maxRetryCount {
-			return fmt.Errorf("failed to restore ipets after %d tries with final error: %w", maxRetryCount, err)
-		}
-	}
+	return handleRestore(fileCreator)
 }
 
 func createSaveFile(iMgr *IPSetManager) *ioutil.FileCreator {
 	fileCreator := ioutil.InitFileCreator()
 
-	// need to create all sets before possibly referencing them in lists
-	for setName := range iMgr.dirtyCaches {
+	handleDeletions(iMgr, fileCreator)
+	handleCreations(iMgr, fileCreator) // need to create all sets before possibly referencing them in lists
+	handleMemberUpdates(iMgr, fileCreator)
+
+	return fileCreator
+}
+
+func handleDeletions(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+	// flush all first so we don't try to delete an ipset referenced by a list we're deleting too
+	handleDeletionsLoop(iMgr, fileCreator, flushSet)
+	handleDeletionsLoop(iMgr, fileCreator, destroySet)
+}
+
+func handleDeletionsLoop(iMgr *IPSetManager, fileCreator *ioutil.FileCreator, function func(*ioutil.FileCreator, string)) {
+	for setName := range iMgr.additionOrUpdateDirtyCache {
+		_, exists := iMgr.setMap[setName]
+		if !exists {
+			function(fileCreator, util.GetHashedName(setName))
+		}
+	}
+}
+
+func flushSet(fileCreator *ioutil.FileCreator, hashedSetName string) {
+	fileCreator.AddLine(util.IpsetFlushFlag, hashedSetName)
+}
+
+func destroySet(fileCreator *ioutil.FileCreator, setName string) {
+	fileCreator.AddLine(util.IpsetDestroyFlag, setName)
+}
+
+func handleCreations(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+	for setName := range iMgr.additionOrUpdateDirtyCache {
 		set := iMgr.setMap[setName]
 		createSet(fileCreator, set)
-		// TEMP NOTES: uses ipset create --exist
-		//     alternatively, could maintain a create cache, but this complicates the dirty and delete cache
 	}
-
-	for setName := range iMgr.dirtyCaches {
-		set := iMgr.setMap[setName]
-		updateMembers(fileCreator, set)
-	}
-
-	for _, hashedName := range iMgr.deleteCache {
-		deleteSet(fileCreator, hashedName)
-	}
-	return fileCreator
 }
 
 func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
@@ -97,6 +97,13 @@ func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
 	}
 
 	fileCreator.AddLine(specs...)
+}
+
+func handleMemberUpdates(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+	for setName := range iMgr.additionOrUpdateDirtyCache {
+		set := iMgr.setMap[setName]
+		updateMembers(fileCreator, set)
+	}
 }
 
 func updateMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
@@ -128,15 +135,22 @@ func addListMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
 	}
 }
 
-func flushSet(fileCreator *ioutil.FileCreator, setName string) {
-	fileCreator.AddLine(util.IpsetFlushFlag, setName)
+func handleRestore(fileCreator *ioutil.FileCreator) error {
+	assertExecExists() // TODO remove if using os/exec
+	for {
+		err := fileCreator.RunWithFile(linuxExec.Command(util.Ipset, util.IpsetRestoreFlag)) // TODO could retry from line that fails
+		if err == nil {
+			return nil
+		}
+		fileCreator.IncRetryCount()
+		if fileCreator.GetRetryCount() >= maxRetryCount {
+			return fmt.Errorf("failed to restore ipets after %d tries with final error: %w", maxRetryCount, err)
+		}
+	}
 }
 
-func deleteSet(fileCreator *ioutil.FileCreator, setName string) {
-	// NOTE assume that the set is empty and isn't referenced in any list sets (should make checks in generic ipsetmanager)
-	destroySet(fileCreator, setName)
-}
-
-func destroySet(fileCreator *ioutil.FileCreator, setName string) {
-	fileCreator.AddLine(util.IpsetDestroyFlag, setName)
+func assertExecExists() {
+	if linuxExec == nil {
+		linuxExec = kexec.New()
+	}
 }
