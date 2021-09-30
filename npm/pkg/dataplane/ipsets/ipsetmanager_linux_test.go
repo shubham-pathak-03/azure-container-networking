@@ -28,6 +28,6 @@ func TestIpsetRestore(t *testing.T) {
 	require.NoError(t, iMgr.ApplyIPSets(""))
 
 	require.NoError(t, iMgr.RemoveFromSet([]string{testPodKeyLabelName}, "10.0.0.5", "c"))
-	require.NoError(t, iMgr.DeleteSet(testPodKeyLabelName))
+	require.NoError(t, iMgr.DeleteIPSet(testPodKeyLabelName))
 	require.NoError(t, iMgr.ApplyIPSets(""))
 }
