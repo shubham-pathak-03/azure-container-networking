@@ -30,9 +30,9 @@ func destroyNPMIPSets() error {
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	// DEBUGGING)
 	fmt.Println("DIRTY CACHE")
-	fmt.Println(iMgr.additionOrUpdateDirtyCache)
+	fmt.Println(iMgr.toAddOrUpdateCache)
 	fmt.Println("DELETE CACHE")
-	// TODO calc sets to-be-deleted
+	fmt.Println(iMgr.toDeleteCache)
 
 	fileCreator := createSaveFile(iMgr)
 
@@ -55,16 +55,11 @@ func createSaveFile(iMgr *IPSetManager) *ioutil.FileCreator {
 
 func handleDeletions(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
 	// flush all first so we don't try to delete an ipset referenced by a list we're deleting too
-	handleDeletionsLoop(iMgr, fileCreator, flushSet)
-	handleDeletionsLoop(iMgr, fileCreator, destroySet)
-}
-
-func handleDeletionsLoop(iMgr *IPSetManager, fileCreator *ioutil.FileCreator, function func(*ioutil.FileCreator, string)) {
-	for setName := range iMgr.additionOrUpdateDirtyCache {
-		_, exists := iMgr.setMap[setName]
-		if !exists {
-			function(fileCreator, util.GetHashedName(setName))
-		}
+	for setName := range iMgr.toDeleteCache {
+		flushSet(fileCreator, util.GetHashedName(setName))
+	}
+	for setName := range iMgr.toDeleteCache {
+		destroySet(fileCreator, util.GetHashedName(setName))
 	}
 }
 
@@ -77,7 +72,7 @@ func destroySet(fileCreator *ioutil.FileCreator, setName string) {
 }
 
 func handleCreations(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
-	for setName := range iMgr.additionOrUpdateDirtyCache {
+	for setName := range iMgr.toAddOrUpdateCache {
 		set := iMgr.setMap[setName]
 		createSet(fileCreator, set)
 	}
@@ -100,7 +95,7 @@ func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
 }
 
 func handleMemberUpdates(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
-	for setName := range iMgr.additionOrUpdateDirtyCache {
+	for setName := range iMgr.toAddOrUpdateCache {
 		set := iMgr.setMap[setName]
 		updateMembers(fileCreator, set)
 	}
