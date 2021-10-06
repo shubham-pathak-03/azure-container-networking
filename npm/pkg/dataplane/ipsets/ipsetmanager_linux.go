@@ -32,44 +32,44 @@ func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	fmt.Println("DELETE CACHE")
 	fmt.Println(iMgr.toDeleteCache)
 
-	fileCreator := ioutil.NewFileCreator(ipsetRestoreLineFailurePattern, maxRetryCount)
-	// fileCreator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO
-	handleDeletions(iMgr, fileCreator)
-	handleCreations(iMgr, fileCreator) // need to create all sets before possibly referencing them in lists
-	handleMemberUpdates(iMgr, fileCreator)
+	creator := ioutil.NewFileCreator(ipsetRestoreLineFailurePattern, maxRetryCount)
+	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO
+	handleDeletions(iMgr, creator)
+	handleCreations(iMgr, creator) // need to create all sets before possibly referencing them in lists
+	handleMemberUpdates(iMgr, creator)
 
 	// MORE DEBUGGING
 	fmt.Println("RESTORE FILE")
-	fmt.Println(fileCreator.ToString())
-	return fileCreator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
+	fmt.Println(creator.ToString())
+	return creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
 }
 
-func handleDeletions(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+func handleDeletions(iMgr *IPSetManager, creator *ioutil.FileCreator) {
 	// flush all first so we don't try to delete an ipset referenced by a list we're deleting too
 	for setName := range iMgr.toDeleteCache {
-		flushSet(fileCreator, util.GetHashedName(setName))
+		flushSet(creator, util.GetHashedName(setName))
 	}
 	for setName := range iMgr.toDeleteCache {
-		destroySet(fileCreator, util.GetHashedName(setName))
+		destroySet(creator, util.GetHashedName(setName))
 	}
 }
 
-func flushSet(fileCreator *ioutil.FileCreator, hashedSetName string) {
-	fileCreator.AddLine(0, nil, util.IpsetFlushFlag, hashedSetName) // TODO specify section and error handler
+func flushSet(creator *ioutil.FileCreator, hashedSetName string) {
+	creator.AddLine(0, nil, util.IpsetFlushFlag, hashedSetName) // TODO specify section and error handler
 }
 
-func destroySet(fileCreator *ioutil.FileCreator, setName string) {
-	fileCreator.AddLine(0, nil, util.IpsetDestroyFlag, setName) // TODO specify section and error handler
+func destroySet(creator *ioutil.FileCreator, setName string) {
+	creator.AddLine(0, nil, util.IpsetDestroyFlag, setName) // TODO specify section and error handler
 }
 
-func handleCreations(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+func handleCreations(iMgr *IPSetManager, creator *ioutil.FileCreator) {
 	for setName := range iMgr.toAddOrUpdateCache {
 		set := iMgr.setMap[setName]
-		createSet(fileCreator, set)
+		createSet(creator, set)
 	}
 }
 
-func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
+func createSet(creator *ioutil.FileCreator, set *IPSet) {
 	methodFlag := util.IpsetNetHashFlag
 	if set.Kind == ListSet {
 		methodFlag = util.IpsetSetListFlag
@@ -82,18 +82,18 @@ func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
 		specs = append(specs, util.IpsetMaxelemName, util.IpsetMaxelemNum)
 	}
 
-	fileCreator.AddLine(0, nil, specs...) // TODO specify section and error handler
+	creator.AddLine(0, nil, specs...) // TODO specify section and error handler
 }
 
-func handleMemberUpdates(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
+func handleMemberUpdates(iMgr *IPSetManager, creator *ioutil.FileCreator) {
 	for setName := range iMgr.toAddOrUpdateCache {
 		set := iMgr.setMap[setName]
-		updateMembers(fileCreator, set)
+		updateMembers(creator, set)
 	}
 }
 
-func updateMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
-	flushSet(fileCreator, set.HashedName)
+func updateMembers(creator *ioutil.FileCreator, set *IPSet) {
+	flushSet(creator, set.HashedName)
 
 	// DEBUGGING
 	fmt.Printf("DEBUG-ME\nname: %s\nkind: %s\npodip: \n", set.Name, set.Kind)
@@ -103,20 +103,20 @@ func updateMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
 	fmt.Println()
 
 	if set.Kind == HashSet {
-		addHashSetMembers(fileCreator, set)
+		addHashSetMembers(creator, set)
 	} else {
-		addListMembers(fileCreator, set)
+		addListMembers(creator, set)
 	}
 }
 
-func addHashSetMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
+func addHashSetMembers(creator *ioutil.FileCreator, set *IPSet) {
 	for ip := range set.IPPodKey {
-		fileCreator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, ip) // TODO specify section and error handler
+		creator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, ip) // TODO specify section and error handler
 	}
 }
 
-func addListMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
+func addListMembers(creator *ioutil.FileCreator, set *IPSet) {
 	for _, member := range set.MemberIPSets {
-		fileCreator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, member.HashedName) // TODO specify section and error handler
+		creator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, member.HashedName) // TODO specify section and error handler
 	}
 }
