@@ -5,15 +5,13 @@ import (
 
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
 	"github.com/Azure/azure-container-networking/npm/util"
-	kexec "k8s.io/utils/exec"
 	// osexec "os/exec"
 )
 
 // TODO look at current errors in kusto
 // TODO eventually, have multiple retries and start at spot based on line number in error?
 const maxRetryCount = 1
-
-var linuxExec kexec.Interface
+const ipsetRestoreLineFailurePattern = "Error in line (\\d+):"
 
 // TODO make corresponding function in generic ipsetmanager
 func destroyNPMIPSets() error {
@@ -34,23 +32,16 @@ func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	fmt.Println("DELETE CACHE")
 	fmt.Println(iMgr.toDeleteCache)
 
-	fileCreator := createSaveFile(iMgr)
-
-	// MORE DEBUGGING
-	fmt.Println("RESTORE FILE")
-	fmt.Println(fileCreator.ToString())
-
-	return handleRestore(fileCreator)
-}
-
-func createSaveFile(iMgr *IPSetManager) *ioutil.FileCreator {
-	fileCreator := ioutil.InitFileCreator()
-
+	fileCreator := ioutil.NewFileCreator(ipsetRestoreLineFailurePattern, maxRetryCount)
+	// fileCreator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO
 	handleDeletions(iMgr, fileCreator)
 	handleCreations(iMgr, fileCreator) // need to create all sets before possibly referencing them in lists
 	handleMemberUpdates(iMgr, fileCreator)
 
-	return fileCreator
+	// MORE DEBUGGING
+	fmt.Println("RESTORE FILE")
+	fmt.Println(fileCreator.ToString())
+	return fileCreator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
 }
 
 func handleDeletions(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
@@ -64,11 +55,11 @@ func handleDeletions(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
 }
 
 func flushSet(fileCreator *ioutil.FileCreator, hashedSetName string) {
-	fileCreator.AddLine(util.IpsetFlushFlag, hashedSetName)
+	fileCreator.AddLine(0, nil, util.IpsetFlushFlag, hashedSetName) // TODO specify section and error handler
 }
 
 func destroySet(fileCreator *ioutil.FileCreator, setName string) {
-	fileCreator.AddLine(util.IpsetDestroyFlag, setName)
+	fileCreator.AddLine(0, nil, util.IpsetDestroyFlag, setName) // TODO specify section and error handler
 }
 
 func handleCreations(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
@@ -91,7 +82,7 @@ func createSet(fileCreator *ioutil.FileCreator, set *IPSet) {
 		specs = append(specs, util.IpsetMaxelemName, util.IpsetMaxelemNum)
 	}
 
-	fileCreator.AddLine(specs...)
+	fileCreator.AddLine(0, nil, specs...) // TODO specify section and error handler
 }
 
 func handleMemberUpdates(iMgr *IPSetManager, fileCreator *ioutil.FileCreator) {
@@ -120,32 +111,12 @@ func updateMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
 
 func addHashSetMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
 	for ip := range set.IPPodKey {
-		fileCreator.AddLine(util.IpsetAppendFlag, set.HashedName, ip)
+		fileCreator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, ip) // TODO specify section and error handler
 	}
 }
 
 func addListMembers(fileCreator *ioutil.FileCreator, set *IPSet) {
 	for _, member := range set.MemberIPSets {
-		fileCreator.AddLine(util.IpsetAppendFlag, set.HashedName, member.HashedName)
-	}
-}
-
-func handleRestore(fileCreator *ioutil.FileCreator) error {
-	assertExecExists() // TODO remove if using os/exec
-	for {
-		err := fileCreator.RunWithFile(linuxExec.Command(util.Ipset, util.IpsetRestoreFlag)) // TODO could retry from line that fails
-		if err == nil {
-			return nil
-		}
-		fileCreator.IncRetryCount()
-		if fileCreator.GetRetryCount() >= maxRetryCount {
-			return fmt.Errorf("failed to restore ipets after %d tries with final error: %w", maxRetryCount, err)
-		}
-	}
-}
-
-func assertExecExists() {
-	if linuxExec == nil {
-		linuxExec = kexec.New()
+		fileCreator.AddLine(0, nil, util.IpsetAppendFlag, set.HashedName, member.HashedName) // TODO specify section and error handler
 	}
 }
