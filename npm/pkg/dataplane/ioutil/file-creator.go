@@ -150,6 +150,7 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 			return fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.retryCount, commandString, err, stdErr)
 		}
 
+		// begin the retry logic
 		// retry if there was a known file-level error
 		for _, errorDefinition := range creator.errorsToRetryOn {
 			if errorDefinition.isMatch(stdErr) {
@@ -181,6 +182,7 @@ func (creator *FileCreator) handleLineErrors(lineNum int, commandString, stdErr 
 		case SkipLine:
 			log.Errorf("skipping line %d for command [%s]", lineNum, commandString)
 			creator.lineNumbersToOmit[lineNum] = struct{}{}
+			errorHandler.Callback()
 			return
 		case AbortSection:
 			log.Errorf("aborting section associated with line %d for command [%s]", lineNum, commandString)
@@ -192,6 +194,7 @@ func (creator *FileCreator) handleLineErrors(lineNum int, commandString, stdErr 
 			for _, lineNum := range section.lineNums {
 				creator.lineNumbersToOmit[lineNum] = struct{}{}
 			}
+			errorHandler.Callback()
 			return
 		}
 	}

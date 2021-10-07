@@ -11,8 +11,8 @@ import (
 
 const (
 	maxRetryCount                  = 1
-	deletionPrefix                 = "delete-"
-	creationPrefix                 = "create-"
+	deletionPrefix                 = "delete"
+	creationPrefix                 = "create"
 	ipsetRestoreLineFailurePattern = "Error in line (\\d+):"
 	setExistsPattern               = "Set cannot be created: set with the same name already exists"
 	setDoesntExistPattern          = "The set with the given name does not exist"
@@ -58,7 +58,7 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator) {
 				Callback:   func() { log.Logf("was going to delete set %s but it doesn't exist", setName) },
 			},
 		}
-		sectionID := deletionPrefix + setName
+		sectionID := getSectionID(deletionPrefix, setName)
 		hashedSetName := util.GetHashedName(setName)
 		creator.AddLine(sectionID, errorHandlers, util.IpsetFlushFlag, hashedSetName) // flush set
 	}
@@ -74,7 +74,7 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator) {
 				},
 			},
 		}
-		sectionID := deletionPrefix + setName
+		sectionID := getSectionID(deletionPrefix, setName)
 		hashedSetName := util.GetHashedName(setName)
 		creator.AddLine(sectionID, errorHandlers, util.IpsetDestroyFlag, hashedSetName) // destroy set
 	}
@@ -109,7 +109,7 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator) {
 				},
 			},
 		}
-		sectionID := creationPrefix + setName
+		sectionID := getSectionID(creationPrefix, setName)
 		creator.AddLine(sectionID, errorHandlers, specs...) // create set
 	}
 
@@ -118,7 +118,7 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator) {
 	// - if a member set can't be added to a list because it doesn't exist, then skip the add and mark it as a failure
 	for setName := range iMgr.toAddOrUpdateCache {
 		set := iMgr.setMap[setName]
-		sectionID := creationPrefix + setName
+		sectionID := getSectionID(creationPrefix, setName)
 		creator.AddLine(sectionID, nil, util.IpsetFlushFlag, set.HashedName) // flush set (no error handler needed)
 
 		debugPrintSetContents(set) // FIXME remove
@@ -144,6 +144,10 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator) {
 			}
 		}
 	}
+}
+
+func getSectionID(prefix, setName string) string {
+	return fmt.Sprintf("%s-%s", prefix, setName)
 }
 
 func (iMgr *IPSetManager) debugPrintCaches() {
