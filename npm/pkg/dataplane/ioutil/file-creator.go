@@ -12,15 +12,17 @@ import (
 	// osexec "os/exec"
 )
 
+// TODO add file creator log prefix
+
 // FileCreator is a tool for:
 // - building a buffer file
 // - running a command with the file
 // - handling errors in the file
 type FileCreator struct {
 	lines              []*Line
-	sections           map[int]*Section // key is sectionID
+	sections           map[string]*Section // key is sectionID
 	lineNumbersToOmit  map[int]struct{}
-	errorsToRetryOn    []*ErrorDefinition
+	errorsToRetryOn    []*errorDefinition
 	lineFailurePattern string
 	lineFailureRegex   *regexp.Regexp
 	retryCount         int
@@ -35,27 +37,28 @@ type FileCreator struct {
 // Line defines the content, section, and error handlers for a line
 type Line struct {
 	content       string
-	sectionID     int
+	sectionID     string
 	errorHandlers []*LineErrorHandler
 }
 
 // Section is a logically connected components (not necessarily adjacent lines)
 type Section struct {
-	id       int
+	id       string
 	lineNums []int
 }
 
-// ErrorDefinition defines an error by a regular expression and its error code.
-type ErrorDefinition struct {
+// errorDefinition defines an error by a regular expression and its error code.
+type errorDefinition struct {
 	matchPattern string
 	re           *regexp.Regexp
 }
 
 // LineErrorHandler defines an error and how to handle it
 type LineErrorHandler struct {
-	definition *ErrorDefinition
-	method     LineErrorHandlerMethod
-	reason     string
+	Definition *errorDefinition
+	Method     LineErrorHandlerMethod
+	Reason     string
+	Callback   func()
 }
 
 // LineErrorHandlerMethod defines behavior when an error occurs
@@ -63,18 +66,16 @@ type LineErrorHandlerMethod string
 
 // possible LineErrorHandlerMethod
 const (
-	SkipLine                  LineErrorHandlerMethod = "skip"
-	AbortSection              LineErrorHandlerMethod = "abort"
-	RetryOnceThenSkipLine     LineErrorHandlerMethod = "retry then skip"
-	RetryOnceThenAbortSection LineErrorHandlerMethod = "retry then abort"
+	SkipLine     LineErrorHandlerMethod = "skip"
+	AbortSection LineErrorHandlerMethod = "abort"
 )
 
 func NewFileCreator(lineFailurePattern string, maxRetryCount int) *FileCreator {
 	return &FileCreator{
 		lines:              make([]*Line, 0),
-		sections:           make(map[int]*Section),
+		sections:           make(map[string]*Section),
 		lineNumbersToOmit:  make(map[int]struct{}),
-		errorsToRetryOn:    make([]*ErrorDefinition, 0),
+		errorsToRetryOn:    make([]*errorDefinition, 0),
 		lineFailurePattern: lineFailurePattern,
 		lineFailureRegex:   regexp.MustCompile(lineFailurePattern),
 		retryCount:         0,
@@ -83,25 +84,27 @@ func NewFileCreator(lineFailurePattern string, maxRetryCount int) *FileCreator {
 	}
 }
 
-func NewErrorDefinition(pattern string) *ErrorDefinition {
-	return &ErrorDefinition{
+func NewErrorDefinition(pattern string) *errorDefinition {
+	return &errorDefinition{
 		matchPattern: pattern,
 		re:           regexp.MustCompile(pattern),
 	}
 }
 
-func (creator *FileCreator) AddErrorToRetryOn(definition *ErrorDefinition) {
+func (creator *FileCreator) AddErrorToRetryOn(definition *errorDefinition) {
 	creator.errorsToRetryOn = append(creator.errorsToRetryOn, definition)
 }
 
-func (creator *FileCreator) CreateSection(sectionID int) {
-	creator.sections[sectionID] = &Section{sectionID, make([]int, 0)}
-}
-
-func (creator *FileCreator) AddLine(sectionID int, errorHandlers []*LineErrorHandler, items ...string) {
+func (creator *FileCreator) AddLine(sectionID string, errorHandlers []*LineErrorHandler, items ...string) {
+	section, exists := creator.sections[sectionID]
+	if !exists {
+		section := &Section{sectionID, make([]int, 0)}
+		creator.sections[sectionID] = section
+	}
 	spaceSeparatedItems := strings.Join(items, " ")
 	line := &Line{spaceSeparatedItems, sectionID, errorHandlers}
 	creator.lines = append(creator.lines, line)
+	section.lineNums = append(section.lineNums, len(creator.lines)-1)
 }
 
 // ToString combines the lines in the FileCreator and ends with a new line.
@@ -171,24 +174,24 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 func (creator *FileCreator) handleLineErrors(lineNum int, commandString, stdErr string) {
 	line := creator.lines[lineNum]
 	for _, errorHandler := range line.errorHandlers {
-		if !errorHandler.definition.isMatch(stdErr) {
+		if !errorHandler.Definition.isMatch(stdErr) {
 			continue
 		}
-		switch errorHandler.method {
-		case RetryOnceThenSkipLine, RetryOnceThenAbortSection:
-			log.Errorf("retrying line %d one more time for command [%s] for the following reason [%s]", lineNum, commandString, errorHandler.reason) // TODO change wording and possibly have a second error message when skip/abort happens?
-			errorHandler.method = AbortSection
-			if errorHandler.method == RetryOnceThenSkipLine {
-				errorHandler.method = SkipLine
-			}
-			return
+		switch errorHandler.Method {
 		case SkipLine:
+			log.Errorf("skipping line %d for command [%s]", lineNum, commandString)
 			creator.lineNumbersToOmit[lineNum] = struct{}{}
-			log.Errorf("skipping line %d for command [%s] for the following reason [%s]", lineNum, commandString, errorHandler.reason)
 			return
 		case AbortSection:
-			creator.removeSection(line.sectionID)
-			log.Errorf("aborting section associated with line %d for command [%s] for the following reason [%s]", lineNum, commandString, errorHandler.reason)
+			log.Errorf("aborting section associated with line %d for command [%s]", lineNum, commandString)
+			section, exists := creator.sections[line.sectionID]
+			if !exists {
+				log.Errorf("line references section %d which doesn't exist", line.sectionID)
+				return
+			}
+			for _, lineNum := range section.lineNums {
+				creator.lineNumbersToOmit[lineNum] = struct{}{}
+			}
 			return
 		}
 	}
@@ -201,7 +204,7 @@ func (creator *FileCreator) assertExecExists() {
 	}
 }
 
-func (definition *ErrorDefinition) isMatch(stdErr string) bool {
+func (definition *errorDefinition) isMatch(stdErr string) bool {
 	return definition.re.MatchString(stdErr)
 }
 
@@ -224,11 +227,4 @@ func (creator *FileCreator) getErrorLineNumber(commandString, stdErr string) int
 		return -1
 	}
 	return lineNumber
-}
-
-func (creator *FileCreator) removeSection(sectionID int) {
-	section := creator.sections[sectionID]
-	for _, lineNum := range section.lineNums {
-		creator.lineNumbersToOmit[lineNum] = struct{}{}
-	}
 }
