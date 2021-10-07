@@ -19,13 +19,15 @@ import (
 // - running a command with the file
 // - handling errors in the file
 type FileCreator struct {
-	lines             []*Line
-	sections          map[string]*Section // key is sectionID
-	lineNumbersToOmit map[int]struct{}
-	errorsToRetryOn   []*errorDefinition
-	retryCount        int
-	maxRetryCount     int
-	exec              kexec.Interface
+	lines              []*Line
+	sections           map[string]*Section // key is sectionID
+	lineNumbersToOmit  map[int]struct{}
+	errorsToRetryOn    []*errorDefinition
+	lineFailurePattern string
+	lineFailureRegex   *regexp.Regexp
+	retryCount         int
+	maxRetryCount      int
+	exec               kexec.Interface
 }
 
 // TODO for iptables:
