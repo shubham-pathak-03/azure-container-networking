@@ -6,7 +6,8 @@ import (
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
 	"github.com/Azure/azure-container-networking/npm/util"
-	// osexec "os/exec"
+
+	kexec "k8s.io/utils/exec"
 )
 
 const (
@@ -35,7 +36,8 @@ func destroyNPMIPSets() error {
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	iMgr.debugPrintCaches() // FIXME remove
 
-	creator := ioutil.NewFileCreator(ipsetRestoreLineFailurePattern, maxRetryCount)
+	exec := kexec.New()
+	creator := ioutil.NewFileCreator(maxRetryCount, exec, ipsetRestoreLineFailurePattern)
 	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO
 	iMgr.handleDeletions(creator)
 	iMgr.handleAddOrUpdates(creator)
