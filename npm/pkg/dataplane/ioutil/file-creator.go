@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-container-networking/log"
-
 	kexec "k8s.io/utils/exec"
 )
 
@@ -22,9 +21,9 @@ type FileCreator struct {
 	lines                  []*Line
 	sections               map[string]*Section // key is sectionID
 	lineNumbersToOmit      map[int]struct{}
-	errorsToRetryOn        []*errorDefinition
-	lineFailureDefinitions []*errorDefinition
-	retryCount             int
+	errorsToRetryOn        []*ErrorDefinition
+	lineFailureDefinitions []*ErrorDefinition
+	retryCount             int // TODO rename these to try counts
 	maxRetryCount          int
 	exec                   kexec.Interface
 }
@@ -46,15 +45,15 @@ type Section struct {
 	lineNums []int
 }
 
-// errorDefinition defines an error by a regular expression and its error code.
-type errorDefinition struct {
+// ErrorDefinition defines an error by a regular expression and its error code.
+type ErrorDefinition struct {
 	matchPattern string
 	re           *regexp.Regexp
 }
 
 // LineErrorHandler defines an error and how to handle it
 type LineErrorHandler struct {
-	Definition *errorDefinition
+	Definition *ErrorDefinition
 	Method     LineErrorHandlerMethod
 	Reason     string
 	Callback   func()
@@ -74,8 +73,8 @@ func NewFileCreator(maxRetryCount int, exec kexec.Interface, lineFailurePatterns
 		lines:                  make([]*Line, 0),
 		sections:               make(map[string]*Section),
 		lineNumbersToOmit:      make(map[int]struct{}),
-		errorsToRetryOn:        make([]*errorDefinition, 0),
-		lineFailureDefinitions: make([]*errorDefinition, len(lineFailurePatterns)),
+		errorsToRetryOn:        make([]*ErrorDefinition, 0),
+		lineFailureDefinitions: make([]*ErrorDefinition, len(lineFailurePatterns)),
 		retryCount:             0,
 		maxRetryCount:          maxRetryCount,
 		exec:                   exec,
@@ -86,14 +85,14 @@ func NewFileCreator(maxRetryCount int, exec kexec.Interface, lineFailurePatterns
 	return creator
 }
 
-func NewErrorDefinition(pattern string) *errorDefinition {
-	return &errorDefinition{
+func NewErrorDefinition(pattern string) *ErrorDefinition {
+	return &ErrorDefinition{
 		matchPattern: pattern,
 		re:           regexp.MustCompile(pattern),
 	}
 }
 
-func (creator *FileCreator) AddErrorToRetryOn(definition *errorDefinition) {
+func (creator *FileCreator) AddErrorToRetryOn(definition *ErrorDefinition) {
 	creator.errorsToRetryOn = append(creator.errorsToRetryOn, definition)
 }
 
@@ -122,45 +121,74 @@ func (creator *FileCreator) ToString() string {
 }
 
 func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error {
-	commandString := cmd + " " + strings.Join(args, " ")
 	fileString := creator.ToString()
-	for {
-		command := creator.exec.Command(cmd, args...)
-		command.SetStdin(bytes.NewBufferString(fileString))
-		// stdErrBuffer := bytes.NewBuffer(nil)
-		// command.SetStderr(stdErrBuffer)
-
-		stdErrBytes, err := command.CombinedOutput()
-		if err == nil {
-			return nil // success
-		}
-
-		stdErr := string(stdErrBytes)
-		// stdErr := stdErrBuffer.String()
-		log.Errorf("on try number %d, failed to run command [%s] with error [%w] and stdErr [%s]. Used file:\n%s", creator.retryCount, commandString, err, stdErr, fileString)
-		wasLastTry := creator.retryCount >= creator.maxRetryCount
-		if wasLastTry {
-			return fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.retryCount, commandString, err, stdErr)
-		}
-
-		// begin the retry logic
-		creator.retryCount++
-		if creator.hasFileLevelError(stdErr) {
-			log.Logf("detected a file-level error: retrying command [%s] with same file", commandString)
-			continue // retry
-		}
-
-		// no file-level error, so handle line-level error if there is one
-		lineNum := creator.getErrorLineNumber(commandString, stdErr)
-		if lineNum == -1 {
-			// can't detect a line number error
-			log.Logf("unknown error: retrying command [%s] with same file", commandString)
-			continue // retry
-		}
-		creator.handleLineError(lineNum, commandString, stdErr)
-		fileString := creator.ToString()
-		log.Logf("rerunning command [%s] with new file:\n%s", commandString, fileString)
+	wasFileAltered, err := creator.runCommandOnceWithFile(fileString, cmd, args...)
+	if err == nil {
+		return nil
 	}
+	for {
+		if creator.hasNoMoreRetries() {
+			return fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+		}
+		commandString := cmd + " " + strings.Join(args, " ")
+		if wasFileAltered {
+			fileString = creator.ToString()
+			log.Logf("rerunning command [%s] with new file:\n%s", commandString, fileString)
+		} else {
+			log.Logf("rerunning command [%s] with the same file")
+		}
+		wasFileAltered, err = creator.runCommandOnceWithFile(fileString, cmd, args...)
+	}
+}
+
+// RunCommandOnceWithFile runs the command with the file once and increments the retry count.
+// It returns whether the file was altered and any error.
+// For automatic retrying and proper logging, use RunCommandWithFile. This method was designed for external testing.
+func (creator *FileCreator) RunCommandOnceWithFile(cmd string, args ...string) (bool, error) {
+	commandString := cmd + " " + strings.Join(args, " ")
+	if creator.hasNoMoreRetries() {
+		return false, fmt.Errorf("reached max retry count %d for command [%s]", creator.retryCount, commandString)
+	}
+	fileString := creator.ToString()
+	return creator.runCommandOnceWithFile(fileString, cmd, args...)
+}
+
+func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args ...string) (bool, error) {
+	command := creator.exec.Command(cmd, args...)
+	command.SetStdin(bytes.NewBufferString(fileString))
+
+	stdErrBytes, err := command.CombinedOutput()
+	if err == nil {
+		return false, nil // success
+	}
+	creator.retryCount++
+
+	commandString := cmd + " " + strings.Join(args, " ")
+	stdErr := string(stdErrBytes)
+	log.Errorf("on try number %d, failed to run command [%s] with error [%v] and stdErr [%s]. Used file:\n%s", creator.retryCount, commandString, err, stdErr, fileString)
+	if creator.hasNoMoreRetries() {
+		return false, fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.retryCount, commandString, err, stdErr)
+	}
+
+	// begin the retry logic
+	creator.retryCount++
+	if creator.hasFileLevelError(stdErr) {
+		log.Logf("detected a file-level error", commandString)
+		return false, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+	}
+
+	// no file-level error, so handle line-level error if there is one
+	lineNum := creator.getErrorLineNumber(commandString, stdErr)
+	if lineNum == -1 {
+		// can't detect a line number error
+		return false, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+	}
+	wasFileAltered := creator.handleLineError(lineNum, commandString, stdErr)
+	return wasFileAltered, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+}
+
+func (creator *FileCreator) hasNoMoreRetries() bool {
+	return creator.retryCount >= creator.maxRetryCount
 }
 
 func (creator *FileCreator) hasFileLevelError(stdErr string) bool {
@@ -172,7 +200,7 @@ func (creator *FileCreator) hasFileLevelError(stdErr string) bool {
 	return false
 }
 
-func (definition *errorDefinition) isMatch(stdErr string) bool {
+func (definition *ErrorDefinition) isMatch(stdErr string) bool {
 	return definition.re.MatchString(stdErr)
 }
 
@@ -187,11 +215,11 @@ func (creator *FileCreator) getErrorLineNumber(commandString, stdErr string) int
 		lineNumString := result[1]
 		lineNum, err := strconv.Atoi(lineNumString)
 		if err != nil {
-			log.Logf("error regex pattern %s didn't produce a number for command [%s] with stdErr [%s]", definition.matchPattern, commandString, stdErr)
+			log.Logf("expected error with line number, but error regex pattern %s didn't produce a number for command [%s] with stdErr [%s]", definition.matchPattern, commandString, stdErr)
 			continue
 		}
 		if lineNum < 1 || lineNum > len(creator.lines) {
-			log.Logf("error regex pattern %s produced invalid line number %d for command [%s] with stdErr [%s]", definition.matchPattern, lineNum, commandString, stdErr)
+			log.Logf("expected error with line number, but error regex pattern %s produced an invalid line number %d for command [%s] with stdErr [%s]", definition.matchPattern, lineNum, commandString, stdErr)
 			continue
 		}
 		return lineNum
@@ -199,7 +227,8 @@ func (creator *FileCreator) getErrorLineNumber(commandString, stdErr string) int
 	return -1
 }
 
-func (creator *FileCreator) handleLineError(lineNum int, commandString, stdErr string) {
+// return whether the file was altered
+func (creator *FileCreator) handleLineError(lineNum int, commandString, stdErr string) bool {
 	lineNumIndex := lineNum - 1
 	line := creator.lines[lineNumIndex]
 	for _, errorHandler := range line.errorHandlers {
@@ -211,20 +240,22 @@ func (creator *FileCreator) handleLineError(lineNum int, commandString, stdErr s
 			log.Errorf("skipping line %d for command [%s]", lineNumIndex, commandString)
 			creator.lineNumbersToOmit[lineNumIndex] = struct{}{}
 			errorHandler.Callback()
-			return
+			return true
 		case AbortSection:
 			log.Errorf("aborting section associated with line %d for command [%s]", lineNumIndex, commandString)
 			section, exists := creator.sections[line.sectionID]
 			if !exists {
-				log.Errorf("line references section %d which doesn't exist", line.sectionID)
-				return
+				log.Errorf("can't abort section because line references section %d which doesn't exist, so skipping the line instead", line.sectionID)
+				creator.lineNumbersToOmit[lineNumIndex] = struct{}{}
+			} else {
+				for _, lineNum := range section.lineNums {
+					creator.lineNumbersToOmit[lineNum] = struct{}{}
+				}
 			}
-			for _, lineNum := range section.lineNums {
-				creator.lineNumbersToOmit[lineNum] = struct{}{}
-			}
-			errorHandler.Callback()
-			return
 		}
+		errorHandler.Callback()
+		return true
 	}
 	log.Logf("no error handler for command [%s] with stdErr [%s]", commandString, stdErr)
+	return false
 }
