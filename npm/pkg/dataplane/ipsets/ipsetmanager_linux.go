@@ -36,23 +36,34 @@ func destroyNPMIPSets() error {
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	iMgr.debugPrintCaches() // FIXME remove
 
-	exec := kexec.New()
-	creator := ioutil.NewFileCreator(maxRetryCount, exec, ipsetRestoreLineFailurePattern)
-	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO
+	creator := ioutil.NewFileCreator(maxRetryCount, kexec.New(), ipsetRestoreLineFailurePattern) // FIXME use IOSHIM
+	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
+
+	iMgr.handleFlushes(creator)
 	iMgr.handleDeletions(creator)
-	iMgr.handleAddOrUpdates(creator)
+
+	iMgr.handleAddOrUpdates(creator, toAddOrUpdateSetNames)
 
 	debugPrintRestoreFile(creator) // FIXME remove
-
 	return creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
 }
 
-func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator) {
+// FIXME don't pass exec
+func (iMgr *IPSetManager) getFileCreator(exec kexec.Interface) *ioutil.FileCreator {
+	creator := ioutil.NewFileCreator(maxRetryCount, exec, ipsetRestoreLineFailurePattern)
+	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
+
+	iMgr.handleDeletions(creator, toDeleteSetNames)
+	iMgr.handleAddOrUpdates(creator, toAddOrUpdateSetNames)
+	return creator
+}
+
+func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator, setNames []string) {
 	// flush all first so we don't try to delete an ipset referenced by a list we're deleting too
 	// error handling:
 	// - abort the flush and delete call for a set if the set doesn't exist
 	// - if the set is in use by a kernel component, then skip the delete and mark it as a failure
-	for setName := range iMgr.toDeleteCache {
+	for _, setName := range setNames {
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
 				Definition: ioutil.NewErrorDefinition(setDoesntExistPattern),
@@ -65,7 +76,7 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator) {
 		creator.AddLine(sectionID, errorHandlers, util.IpsetFlushFlag, hashedSetName) // flush set
 	}
 
-	for setName := range iMgr.toDeleteCache {
+	for _, setName := range setNames {
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
 				Definition: ioutil.NewErrorDefinition(setInUseByKernelPattern),
@@ -82,11 +93,11 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator) {
 	}
 }
 
-func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator) {
+func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNames []string) {
 	// create all sets first
 	// error handling:
 	// - abort the create, flush, and add calls if create doesn't work
-	for setName := range iMgr.toAddOrUpdateCache {
+	for _, setName := range setNames {
 		set := iMgr.setMap[setName]
 
 		methodFlag := util.IpsetNetHashFlag
@@ -118,12 +129,12 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator) {
 	// flush and add all IPs/members for each set
 	// error handling:
 	// - if a member set can't be added to a list because it doesn't exist, then skip the add and mark it as a failure
-	for setName := range iMgr.toAddOrUpdateCache {
+	for _, setName := range setNames {
 		set := iMgr.setMap[setName]
 		sectionID := getSectionID(creationPrefix, setName)
 		creator.AddLine(sectionID, nil, util.IpsetFlushFlag, set.HashedName) // flush set (no error handler needed)
 
-		debugPrintSetContents(set) // FIXME remove
+		// debugPrintSetContents(set) // FIXME remove
 
 		if set.Kind == HashSet {
 			for ip := range set.IPPodKey {
@@ -153,6 +164,10 @@ func getSectionID(prefix, setName string) string {
 }
 
 func (iMgr *IPSetManager) debugPrintCaches() {
+	fmt.Println("WHOLE CACHE")
+	for _, set := range iMgr.setMap {
+		fmt.Println(set)
+	}
 	fmt.Println("DIRTY CACHE")
 	fmt.Println(iMgr.toAddOrUpdateCache)
 	fmt.Println("DELETE CACHE")
