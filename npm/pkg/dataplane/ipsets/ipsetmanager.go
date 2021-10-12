@@ -232,7 +232,7 @@ func (iMgr *IPSetManager) ApplyIPSets(networkID string) error {
 	defer iMgr.Unlock()
 
 	// Call the appropriate apply ipsets
-	err := iMgr.applyIPSets()
+	err := iMgr.applyIPSets(networkID)
 	if err != nil {
 		return err
 	}
