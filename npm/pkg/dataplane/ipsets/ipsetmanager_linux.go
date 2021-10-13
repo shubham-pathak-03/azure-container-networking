@@ -6,12 +6,10 @@ import (
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
 	"github.com/Azure/azure-container-networking/npm/util"
-
-	kexec "k8s.io/utils/exec"
 )
 
 const (
-	maxRetryCount                  = 1
+	maxTryCount                    = 1
 	deletionPrefix                 = "delete"
 	creationPrefix                 = "create"
 	ipsetRestoreLineFailurePattern = "Error in line (\\d+):"
@@ -34,25 +32,37 @@ func destroyNPMIPSets() error {
 
 // don't need networkID
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
-	iMgr.debugPrintCaches() // FIXME remove
-
-	creator := ioutil.NewFileCreator(maxRetryCount, kexec.New(), ipsetRestoreLineFailurePattern) // FIXME use IOSHIM
-	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
-
-	iMgr.handleFlushes(creator)
-	iMgr.handleDeletions(creator)
-
-	iMgr.handleAddOrUpdates(creator, toAddOrUpdateSetNames)
-
-	debugPrintRestoreFile(creator) // FIXME remove
-	return creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
+	toDeleteSetNames := convertCacheToSliceAndDeleteCache(iMgr.toDeleteCache)
+	toAddOrUpdateSetNames := convertCacheToSliceAndDeleteCache(iMgr.toAddOrUpdateCache)
+	creator := iMgr.getFileCreator(maxTryCount, toDeleteSetNames, toAddOrUpdateSetNames)
+	err := creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
+	if err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
 }
 
-// FIXME don't pass exec
-func (iMgr *IPSetManager) getFileCreator(exec kexec.Interface) *ioutil.FileCreator {
-	creator := ioutil.NewFileCreator(maxRetryCount, exec, ipsetRestoreLineFailurePattern)
-	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
+func convertCacheToSliceAndDeleteCache(cache map[string]struct{}) []string {
+	result := make([]string, len(cache))
+	i := 0
+	for setName := range cache {
+		result[i] = setName
+		delete(cache, setName)
+		i++
+	}
+	return result
+}
 
+// getFileCreator encodes an ipset restore file with error handling.
+// We use slices instead of maps so we can have determinstic behavior for
+// unit tests on the file creator i.e. check file contents before and after error handling.
+// Without slices, we could do unit tests on certain segments of the file,
+// but things would get complicated for checking error handling.
+// We can't escape the nondeterministic behavior of adding members,
+// but we can handle this in UTs with sorting.
+func (iMgr *IPSetManager) getFileCreator(maxTryCount int, toDeleteSetNames, toAddOrUpdateSetNames []string) *ioutil.FileCreator {
+	creator := ioutil.NewFileCreator(iMgr.ioShim, maxTryCount, ipsetRestoreLineFailurePattern)
+	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
 	iMgr.handleDeletions(creator, toDeleteSetNames)
 	iMgr.handleAddOrUpdates(creator, toAddOrUpdateSetNames)
 	return creator

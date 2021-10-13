@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
-	kexec "k8s.io/utils/exec"
 )
 
 // TODO add file creator log prefix
@@ -23,9 +23,9 @@ type FileCreator struct {
 	lineNumbersToOmit      map[int]struct{}
 	errorsToRetryOn        []*ErrorDefinition
 	lineFailureDefinitions []*ErrorDefinition
-	retryCount             int // TODO rename these to try counts
-	maxRetryCount          int
-	exec                   kexec.Interface
+	tryCount               int
+	maxTryCount            int
+	ioShim                 *common.IOShim
 }
 
 // TODO for iptables:
@@ -68,16 +68,16 @@ const (
 	AbortSection LineErrorHandlerMethod = "abort"
 )
 
-func NewFileCreator(maxRetryCount int, exec kexec.Interface, lineFailurePatterns ...string) *FileCreator {
+func NewFileCreator(ioShim *common.IOShim, maxTryCount int, lineFailurePatterns ...string) *FileCreator {
 	creator := &FileCreator{
 		lines:                  make([]*Line, 0),
 		sections:               make(map[string]*Section),
 		lineNumbersToOmit:      make(map[int]struct{}),
 		errorsToRetryOn:        make([]*ErrorDefinition, 0),
 		lineFailureDefinitions: make([]*ErrorDefinition, len(lineFailurePatterns)),
-		retryCount:             0,
-		maxRetryCount:          maxRetryCount,
-		exec:                   exec,
+		tryCount:               0,
+		maxTryCount:            maxTryCount,
+		ioShim:                 ioShim,
 	}
 	for k, lineFailurePattern := range lineFailurePatterns {
 		creator.lineFailureDefinitions[k] = NewErrorDefinition(lineFailurePattern)
@@ -124,6 +124,7 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 	fileString := creator.ToString()
 	wasFileAltered, err := creator.runCommandOnceWithFile(fileString, cmd, args...)
 	if err == nil {
+		// success
 		return nil
 	}
 	for {
@@ -135,45 +136,51 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 			fileString = creator.ToString()
 			log.Logf("rerunning command [%s] with new file:\n%s", commandString, fileString)
 		} else {
-			log.Logf("rerunning command [%s] with the same file")
+			log.Logf("rerunning command [%s] with the same file", commandString)
 		}
 		wasFileAltered, err = creator.runCommandOnceWithFile(fileString, cmd, args...)
+		if err == nil {
+			// success
+			return nil
+		}
 	}
 }
 
-// RunCommandOnceWithFile runs the command with the file once and increments the retry count.
+// RunCommandOnceWithFile runs the command with the file once and increments the try count.
 // It returns whether the file was altered and any error.
-// For automatic retrying and proper logging, use RunCommandWithFile. This method was designed for external testing.
+// For automatic retrying and proper logging, use RunCommandWithFile.
+// This method can be used for external testing of file creator contents after each run.
 func (creator *FileCreator) RunCommandOnceWithFile(cmd string, args ...string) (bool, error) {
 	commandString := cmd + " " + strings.Join(args, " ")
 	if creator.hasNoMoreRetries() {
-		return false, fmt.Errorf("reached max retry count %d for command [%s]", creator.retryCount, commandString)
+		return false, fmt.Errorf("reached max try count %d for command [%s]", creator.tryCount, commandString)
 	}
 	fileString := creator.ToString()
 	return creator.runCommandOnceWithFile(fileString, cmd, args...)
 }
 
 func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args ...string) (bool, error) {
-	command := creator.exec.Command(cmd, args...)
+	command := creator.ioShim.Exec.Command(cmd, args...)
 	command.SetStdin(bytes.NewBufferString(fileString))
 
+	// run the command
 	stdErrBytes, err := command.CombinedOutput()
 	if err == nil {
-		return false, nil // success
+		// success
+		return false, nil
 	}
-	creator.retryCount++
+	creator.tryCount++
 
 	commandString := cmd + " " + strings.Join(args, " ")
 	stdErr := string(stdErrBytes)
-	log.Errorf("on try number %d, failed to run command [%s] with error [%v] and stdErr [%s]. Used file:\n%s", creator.retryCount, commandString, err, stdErr, fileString)
+	log.Errorf("on try number %d, failed to run command [%s] with error [%v] and stdErr [%s]. Used file:\n%s", creator.tryCount, commandString, err, stdErr, fileString)
 	if creator.hasNoMoreRetries() {
-		return false, fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.retryCount, commandString, err, stdErr)
+		return false, fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.tryCount, commandString, err, stdErr)
 	}
 
 	// begin the retry logic
-	creator.retryCount++
 	if creator.hasFileLevelError(stdErr) {
-		log.Logf("detected a file-level error", commandString)
+		log.Logf("detected a file-level error while running command [%s]", commandString)
 		return false, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
 	}
 
@@ -188,7 +195,7 @@ func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args 
 }
 
 func (creator *FileCreator) hasNoMoreRetries() bool {
-	return creator.retryCount >= creator.maxRetryCount
+	return creator.tryCount >= creator.maxTryCount
 }
 
 func (creator *FileCreator) hasFileLevelError(stdErr string) bool {

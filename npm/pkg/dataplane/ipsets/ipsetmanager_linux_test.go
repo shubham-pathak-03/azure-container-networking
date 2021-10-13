@@ -2,51 +2,56 @@ package ipsets
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-container-networking/common"
+	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
 	"github.com/Azure/azure-container-networking/npm/util"
 	testutils "github.com/Azure/azure-container-networking/test/utils"
 
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	testNSSetName           = "test-ns-set"
-	testKeyPodSetName       = "test-keyPod-set"
-	testKVPodSetName        = "test-kvPod-set"
-	testNamedportSetName    = "test-namedport-set"
-	testCIDRSetName         = "test-cidr-set"
-	testKeyNSListName       = "test-keyNS-list"
-	testKVNSListName        = "test-kvNS-list"
-	testNestedLabelListName = "test-nestedlabel-list"
-)
+type testSet struct {
+	metadata   *IPSetMetadata
+	hashedName string
+}
+
+func createTestSet(name string, setType SetType) *testSet {
+	set := &testSet{
+		metadata: &IPSetMetadata{name, setType},
+	}
+	set.hashedName = util.GetHashedName(set.metadata.GetPrefixName())
+	return set
+}
 
 var (
-	testNSSetHashedName           = util.GetHashedName(testNSSetName)
-	testKeyPodSetHashedName       = util.GetHashedName(testKeyPodSetName)
-	testKVPodSetHashedName        = util.GetHashedName(testKVPodSetName)
-	testNamedportSetHashedName    = util.GetHashedName(testNamedportSetName)
-	testCIDRSetHashedName         = util.GetHashedName(testCIDRSetName)
-	testKeyNSListHashedName       = util.GetHashedName(testKeyNSListName)
-	testKVNSListHashedName        = util.GetHashedName(testKVNSListName)
-	testNestedLabelListHashedName = util.GetHashedName(testNestedLabelListName)
-
 	fakeSuccessCommand = testutils.TestCmd{
 		Cmd:      []string{util.Ipset, util.IpsetRestoreFlag},
 		Stdout:   "success",
 		ExitCode: 0,
 	}
 
+	testNSSet           = createTestSet("test-ns-set", NameSpace)
+	testKeyPodSet       = createTestSet("test-keyPod-set", KeyLabelOfPod)
+	testKVPodSet        = createTestSet("test-kvPod-set", KeyValueLabelOfPod)
+	testNamedportSet    = createTestSet("test-namedport-set", NamedPorts)
+	testCIDRSet         = createTestSet("test-cidr-set", CIDRBlocks)
+	testKeyNSList       = createTestSet("test-keyNS-list", KeyLabelOfNameSpace)
+	testKVNSList        = createTestSet("test-kvNS-list", KeyValueLabelOfNameSpace)
+	testNestedLabelList = createTestSet("test-nestedlabel-list", NestedLabelOfPod)
+
 	toAddOrUpdateSetNames = []string{
-		testNSSetName,
-		testKeyPodSetName,
-		testKVPodSetName,
-		testNamedportSetName,
-		testCIDRSetName,
-		testKeyNSListName,
-		testKVNSListName,
-		testNestedLabelListName,
+		testNSSet.metadata.GetPrefixName(),
+		testKeyPodSet.metadata.GetPrefixName(),
+		testKVPodSet.metadata.GetPrefixName(),
+		testNamedportSet.metadata.GetPrefixName(),
+		testCIDRSet.metadata.GetPrefixName(),
+		testKeyNSList.metadata.GetPrefixName(),
+		testKVNSList.metadata.GetPrefixName(),
+		testNestedLabelList.metadata.GetPrefixName(),
 	}
 )
 
@@ -58,84 +63,71 @@ func TestDestroyNPMIPSets(t *testing.T) {
 // commenting out stuff for list type becaues the set type isn't supported on my local machine
 func TestApplyCreationsAndAdds(t *testing.T) {
 	calls := []testutils.TestCmd{fakeSuccessCommand}
-	fexec := testutils.GetFakeExecWithScripts(calls)
-
-	iMgr := NewIPSetManager("test-node")
+	iMgr := NewIPSetManager("test-node", common.NewMockIOShim(calls))
 
 	createSetsTestHelper(t, iMgr)
 
-	// FIXME ordering of appends is random
-	creator := iMgr.getFileCreator(nil, toAddOrUpdateSetNames, fexec)
+	creator := iMgr.getFileCreator(1, nil, toAddOrUpdateSetNames)
+	actualFileString := getSortedFileString(creator)
+
 	lines := []string{
-		fmt.Sprintf("-N %s -exist nethash", testNSSetHashedName),
-		fmt.Sprintf("-N %s -exist nethash", testKeyPodSetHashedName),
-		fmt.Sprintf("-N %s -exist nethash", testKVPodSetHashedName),
-		fmt.Sprintf("-N %s -exist hash:ip,port", testNamedportSetHashedName),
-		fmt.Sprintf("-N %s -exist nethash maxelem 4294967295", testCIDRSetHashedName),
-		fmt.Sprintf("-N %s -exist setlist", testKeyNSListHashedName),
-		fmt.Sprintf("-N %s -exist setlist", testKVNSListHashedName),
-		fmt.Sprintf("-N %s -exist setlist", testNestedLabelListHashedName),
-		fmt.Sprintf("-F %s", testNSSetHashedName),
-		fmt.Sprintf("-A %s 10.0.0.0", testNSSetHashedName),
-		fmt.Sprintf("-A %s 10.0.0.1", testNSSetHashedName),
-		fmt.Sprintf("-F %s", testKeyPodSetHashedName),
-		fmt.Sprintf("-A %s 10.0.0.5", testKeyPodSetHashedName),
-		fmt.Sprintf("-F %s", testKVPodSetHashedName),
-		fmt.Sprintf("-F %s", testNamedportSetHashedName),
-		fmt.Sprintf("-F %s", testCIDRSetHashedName),
-		fmt.Sprintf("-F %s", testKeyNSListHashedName),
-		fmt.Sprintf("-A %s %s", testKeyNSListHashedName, testNSSetHashedName),
-		fmt.Sprintf("-A %s %s", testKeyNSListHashedName, testKeyPodSetHashedName),
-		fmt.Sprintf("-F %s", testKVNSListHashedName),
-		fmt.Sprintf("-A %s %s", testKVNSListHashedName, testKVPodSetHashedName),
-		fmt.Sprintf("-F %s", testNestedLabelListHashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testKeyPodSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testKVPodSet.hashedName),
+		fmt.Sprintf("-N %s -exist hash:ip,port", testNamedportSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash maxelem 4294967295", testCIDRSet.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKeyNSList.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKVNSList.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testNestedLabelList.hashedName),
 	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0", "10.0.0.1")...)
+	lines = append(lines, getSortedLines(testKeyPodSet, "10.0.0.5")...)
+	lines = append(lines, getSortedLines(testKVPodSet)...)
+	lines = append(lines, getSortedLines(testNamedportSet)...)
+	lines = append(lines, getSortedLines(testCIDRSet)...)
+	lines = append(lines, getSortedLines(testKeyNSList, testNSSet.hashedName, testKeyPodSet.hashedName)...)
+	lines = append(lines, getSortedLines(testKVNSList, testKVPodSet.hashedName)...)
+	lines = append(lines, getSortedLines(testNestedLabelList)...)
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
-	require.Equal(t, expectedFileString, creator.ToString())
-	require.NoError(t, creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag))
-	// require.NoError(t, iMgr.ApplyIPSets("")) FIXME use this instead of above
-
-	// Test delete and destroy
-	require.NoError(t, iMgr.RemoveFromSet([]string{"test-podkeylabel-set"}, "10.0.0.5", "c"))
-	iMgr.DeleteIPSet("test-podkeylabel-set")
-	require.NoError(t, iMgr.ApplyIPSets(""))
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.False(t, wasFileAltered)
+	require.NoError(t, err)
 }
 
 func createSetsTestHelper(t *testing.T, iMgr *IPSetManager) {
-	// TODO remove addReferences and use IPSetMode ApplyAllIPSets
-	iMgr.CreateIPSet(testNSSetName, NameSpace)
-	require.NoError(t, iMgr.AddToSet([]string{testNSSetName}, "10.0.0.0", "a"))
-	require.NoError(t, iMgr.AddToSet([]string{testNSSetName}, "10.0.0.1", "b"))
-	require.NoError(t, iMgr.AddReference(testNSSetName, "reference1", NetPolType)) // FIXME remove this and all other AddReferences
+	// TODO remove addReference() calls and use IPSetMode ApplyAllIPSets
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
+	require.NoError(t, iMgr.AddReference(testNSSet.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testKeyPodSetName, KeyLabelOfPod)
-	require.NoError(t, iMgr.AddToSet([]string{testKeyPodSetName}, "10.0.0.5", "c"))
-	require.NoError(t, iMgr.AddReference(testKeyPodSetName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testKeyPodSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testKeyPodSet.metadata}, "10.0.0.5", "c"))
+	require.NoError(t, iMgr.AddReference(testKeyPodSet.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testKVPodSetName, KeyValueLabelOfPod)
-	require.NoError(t, iMgr.AddReference(testKVPodSetName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testKVPodSet.metadata)
+	require.NoError(t, iMgr.AddReference(testKVPodSet.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testNamedportSetName, NamedPorts)
-	require.NoError(t, iMgr.AddReference(testNamedportSetName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testNamedportSet.metadata)
+	require.NoError(t, iMgr.AddReference(testNamedportSet.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testCIDRSetName, CIDRBlocks)
-	require.NoError(t, iMgr.AddReference(testCIDRSetName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	require.NoError(t, iMgr.AddReference(testCIDRSet.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testKeyNSListName, KeyLabelOfNameSpace)
-	require.NoError(t, iMgr.AddToList(testKeyNSListName, []string{testNSSetName, testKeyPodSetName}))
-	require.NoError(t, iMgr.AddReference(testKeyNSListName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testKeyNSList.metadata)
+	require.NoError(t, iMgr.AddToList(testKeyNSList.metadata, []*IPSetMetadata{testNSSet.metadata, testKeyPodSet.metadata}))
+	require.NoError(t, iMgr.AddReference(testKeyNSList.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testKVNSListName, KeyValueLabelOfNameSpace)
-	require.NoError(t, iMgr.AddToList(testKVNSListName, []string{testKVPodSetName}))
-	require.NoError(t, iMgr.AddReference(testKVNSListName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testKVNSList.metadata)
+	require.NoError(t, iMgr.AddToList(testKVNSList.metadata, []*IPSetMetadata{testKVPodSet.metadata}))
+	require.NoError(t, iMgr.AddReference(testKVNSList.metadata.GetPrefixName(), "reference1", NetPolType))
 
-	iMgr.CreateIPSet(testNestedLabelListName, NestedLabelOfPod)
-	require.NoError(t, iMgr.AddReference(testNestedLabelListName, "reference1", NetPolType))
+	iMgr.CreateIPSet(testNestedLabelList.metadata)
+	require.NoError(t, iMgr.AddReference(testNestedLabelList.metadata.GetPrefixName(), "reference1", NetPolType))
 
 	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
-
-	iMgr.debugPrintCaches() // FIXME remove
 }
 
 func assertEqualContentsTestHelper(t *testing.T, setNames []string, cache map[string]struct{}) {
@@ -146,16 +138,105 @@ func assertEqualContentsTestHelper(t *testing.T, setNames []string, cache map[st
 	}
 }
 
-func TestApplyDeletions(t *testing.T) {
-	// calls := []testutils.TestCmd{fakeSuccessCommand}
-	// fexec := testutils.GetFakeExecWithScripts(calls)
+// the order of adds is nondeterministic, so we're sorting them
+func getSortedLines(set *testSet, members ...string) []string {
+	result := []string{fmt.Sprintf("-F %s", set.hashedName)}
+	adds := make([]string, len(members))
+	for k, member := range members {
+		adds[k] = fmt.Sprintf("-A %s %s", set.hashedName, member)
+	}
+	sort.Strings(adds)
+	return append(result, adds...)
+}
 
-	iMgr := NewIPSetManager("test-node")
+// the order of adds is nondeterministic, so we're sorting all neighboring adds
+func getSortedFileString(creator *ioutil.FileCreator) string {
+	lines := strings.Split(creator.ToString(), "\n")
+
+	sortedLines := make([]string, 0)
+	k := 0
+	for k < len(lines) {
+		line := lines[k]
+		if !isAddLine(line) {
+			sortedLines = append(sortedLines, line)
+			k++
+			continue
+		}
+		addLines := make([]string, 0)
+		for k < len(lines) {
+			line := lines[k]
+			if !isAddLine(line) {
+				break
+			}
+			addLines = append(addLines, line)
+			k++
+		}
+		sort.Strings(addLines)
+		sortedLines = append(sortedLines, addLines...)
+	}
+	return strings.Join(sortedLines, "\n")
+}
+
+func isAddLine(line string) bool {
+	return len(line) >= 2 && line[:2] == "-A"
+}
+
+func assertEqualFileStrings(t *testing.T, expectedFileString, actualFileString string) {
+	if expectedFileString == actualFileString {
+		return
+	}
+	fmt.Println("EXPECTED FILE STRING:")
+	for _, line := range strings.Split(expectedFileString, "\n") {
+		fmt.Println(line)
+	}
+	fmt.Println("ACTUAL FILE STRING")
+	for _, line := range strings.Split(actualFileString, "\n") {
+		fmt.Println(line)
+	}
+	require.FailNow(t, "got unexpected file string (see print contents above")
+}
+
+func TestApplyDeletions(t *testing.T) {
+	calls := []testutils.TestCmd{fakeSuccessCommand, fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", common.NewMockIOShim(calls))
 
 	createSetsTestHelper(t, iMgr)
 	require.NoError(t, iMgr.ApplyIPSets(""))
 
-	// delete a
+	// Remove members and delete others
+	// TODO remove deleteReference() calls and use IPSetMode ApplyAllIPSets
+	require.NoError(t, iMgr.RemoveFromSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
+	require.NoError(t, iMgr.RemoveFromList(testKeyNSList.metadata, []*IPSetMetadata{testKeyPodSet.metadata}))
+
+	require.NoError(t, iMgr.DeleteReference(testCIDRSet.metadata.GetPrefixName(), "reference1", NetPolType))
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+
+	require.NoError(t, iMgr.DeleteReference(testNestedLabelList.metadata.GetPrefixName(), "reference1", NetPolType))
+	iMgr.DeleteIPSet(testNestedLabelList.metadata.GetPrefixName())
+
+	toDeleteSetNames := []string{testCIDRSet.metadata.GetPrefixName(), testNestedLabelList.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName(), testKeyNSList.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	creator := iMgr.getFileCreator(1, toDeleteSetNames, toAddOrUpdateSetNames)
+	actualFileString := getSortedFileString(creator)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-F %s", testNestedLabelList.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testNestedLabelList.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKeyNSList.hashedName),
+	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
+	lines = append(lines, getSortedLines(testKeyNSList, testNSSet.hashedName)...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.False(t, wasFileAltered)
+	require.NoError(t, err)
 }
 
 /*

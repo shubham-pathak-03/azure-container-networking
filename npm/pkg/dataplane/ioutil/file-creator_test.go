@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
 	testutils "github.com/Azure/azure-container-networking/test/utils"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ var fakeSuccessCommand = testutils.TestCmd{
 }
 
 func TestToStringAndSections(t *testing.T) {
-	creator := NewFileCreator(0, nil)
+	creator := NewFileCreator(common.NewMockIOShim(nil), 1)
 	creator.AddLine(section1ID, nil, "line1-item1", "line1-item2", "line1-item3")
 	creator.AddLine(section2ID, nil, "line2-item1", "line2-item2", "line2-item3")
 	creator.AddLine(section1ID, nil, "line3-item1", "line3-item2", "line3-item3")
@@ -56,8 +57,7 @@ func TestRecoveryForFileLevelError(t *testing.T) {
 		},
 		fakeSuccessCommand,
 	}
-	fexec := testutils.GetFakeExecWithScripts(calls)
-	creator := NewFileCreator(1, fexec)
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2)
 	creator.AddErrorToRetryOn(NewErrorDefinition("file-level error"))
 	require.NoError(t, creator.RunCommandWithFile(testCommandString))
 }
@@ -71,8 +71,7 @@ func TestRecoveryForLineError(t *testing.T) {
 		},
 		fakeSuccessCommand,
 	}
-	fexec := testutils.GetFakeExecWithScripts(calls)
-	creator := NewFileCreator(1, fexec, "failure on line (\\d+)")
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2, "failure on line (\\d+)")
 	require.NoError(t, creator.RunCommandWithFile(testCommandString))
 }
 
@@ -83,13 +82,12 @@ func TestTotalFailureAfterRetries(t *testing.T) {
 		ExitCode: 4,
 	}
 	calls := []testutils.TestCmd{errorCommand, errorCommand, errorCommand}
-	fexec := testutils.GetFakeExecWithScripts(calls)
-	creator := NewFileCreator(2, fexec)
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2)
 	require.Error(t, creator.RunCommandWithFile(testCommandString))
 }
 
 func TestHandleLineErrorForAbortSection(t *testing.T) {
-	creator := NewFileCreator(1, nil)
+	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
 	errorHandlers := []*LineErrorHandler{
 		// first error handler doesn't match (include this to make sure the real match gets reached)
 		{
@@ -115,7 +113,7 @@ func TestHandleLineErrorForAbortSection(t *testing.T) {
 }
 
 func TestHandleLineErrorForSkipLine(t *testing.T) {
-	creator := NewFileCreator(1, nil)
+	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
 	errorHandlers := []*LineErrorHandler{
 		{
 			Definition: NewErrorDefinition("match-pattern"),
@@ -140,7 +138,7 @@ line3-item1 line3-item2 line3-item3
 }
 
 func TestHandleLineErrorNoMatch(t *testing.T) {
-	creator := NewFileCreator(1, nil)
+	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
 	errorHandlers := []*LineErrorHandler{
 		// first error handler doesn't match (include this to make sure the real match gets reached)
 		{
@@ -228,7 +226,7 @@ func TestGetErrorLineNumber(t *testing.T) {
 	commandString := "test command"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			creator := NewFileCreator(0, nil, tt.args.lineFailurePatterns...)
+			creator := NewFileCreator(common.NewMockIOShim(nil), 2, tt.args.lineFailurePatterns...)
 			for i := 0; i < 15; i++ {
 				creator.AddLine("", nil, fmt.Sprintf("line%d", i))
 			}
