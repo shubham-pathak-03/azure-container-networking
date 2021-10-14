@@ -48,6 +48,12 @@ line3-item1 line3-item2 line3-item3
 	)
 }
 
+func TestRunCommandWithFile(t *testing.T) {
+	calls := []testutils.TestCmd{fakeSuccessCommand}
+	creator := NewFileCreator(common.NewMockIOShim(calls), 1)
+	require.NoError(t, creator.RunCommandWithFile(testCommandString))
+}
+
 func TestRecoveryForFileLevelError(t *testing.T) {
 	calls := []testutils.TestCmd{
 		{
@@ -66,7 +72,7 @@ func TestRecoveryForLineError(t *testing.T) {
 	calls := []testutils.TestCmd{
 		{
 			Cmd:      []string{testCommandString},
-			Stdout:   "failure on line 7",
+			Stdout:   "failure on line 2",
 			ExitCode: 4,
 		},
 		fakeSuccessCommand,
@@ -87,7 +93,13 @@ func TestTotalFailureAfterRetries(t *testing.T) {
 }
 
 func TestHandleLineErrorForAbortSection(t *testing.T) {
-	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
+	fakeErrorCommand := testutils.TestCmd{
+		Cmd:      []string{testCommandString},
+		Stdout:   "failure on line 1: match-pattern do something please",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{fakeErrorCommand}
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2, "failure on line (\\d+)")
 	errorHandlers := []*LineErrorHandler{
 		// first error handler doesn't match (include this to make sure the real match gets reached)
 		{
@@ -106,14 +118,21 @@ func TestHandleLineErrorForAbortSection(t *testing.T) {
 	creator.AddLine(section1ID, errorHandlers, "line1-item1", "line1-item2", "line1-item3")
 	creator.AddLine(section2ID, nil, "line2-item1", "line2-item2", "line2-item3")
 	creator.AddLine(section1ID, nil, "line3-item1", "line3-item2", "line3-item3")
-	stdErr := "failure: match-pattern do something please"
-	creator.handleLineError(1, testCommandString, stdErr)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(testCommandString)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
 	fileString := creator.ToString()
 	assert.Equal(t, "line2-item1 line2-item2 line2-item3\n", fileString)
 }
 
 func TestHandleLineErrorForSkipLine(t *testing.T) {
-	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
+	fakeErrorCommand := testutils.TestCmd{
+		Cmd:      []string{testCommandString},
+		Stdout:   "failure on line 2: match-pattern do something please",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{fakeErrorCommand}
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2, "failure on line (\\d+)")
 	errorHandlers := []*LineErrorHandler{
 		{
 			Definition: NewErrorDefinition("match-pattern"),
@@ -125,22 +144,22 @@ func TestHandleLineErrorForSkipLine(t *testing.T) {
 	creator.AddLine("", nil, "line1-item1", "line1-item2", "line1-item3")
 	creator.AddLine("", errorHandlers, "line2-item1", "line2-item2", "line2-item3")
 	creator.AddLine("", nil, "line3-item1", "line3-item2", "line3-item3")
-	stdErr := "failure: match-pattern do something please"
-	creator.handleLineError(2, testCommandString, stdErr)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(testCommandString)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
 	fileString := creator.ToString()
-	assert.Equal(
-		t,
-		`line1-item1 line1-item2 line1-item3
-line3-item1 line3-item2 line3-item3
-`,
-		fileString,
-	)
+	assert.Equal(t, "line1-item1 line1-item2 line1-item3\nline3-item1 line3-item2 line3-item3\n", fileString)
 }
 
 func TestHandleLineErrorNoMatch(t *testing.T) {
-	creator := NewFileCreator(common.NewMockIOShim(nil), 2)
+	fakeErrorCommand := testutils.TestCmd{
+		Cmd:      []string{testCommandString},
+		Stdout:   "failure on line 2: match-pattern do something please",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{fakeErrorCommand}
+	creator := NewFileCreator(common.NewMockIOShim(calls), 2, "failure on line (\\d+)")
 	errorHandlers := []*LineErrorHandler{
-		// first error handler doesn't match (include this to make sure the real match gets reached)
 		{
 			Definition: NewErrorDefinition("abc"),
 			Method:     AbortSection,
@@ -151,9 +170,10 @@ func TestHandleLineErrorNoMatch(t *testing.T) {
 	creator.AddLine("", nil, "line1-item1", "line1-item2", "line1-item3")
 	creator.AddLine("", errorHandlers, "line2-item1", "line2-item2", "line2-item3")
 	creator.AddLine("", nil, "line3-item1", "line3-item2", "line3-item3")
-	stdErr := "failure: match-pattern do something please"
 	fileStringBefore := creator.ToString()
-	creator.handleLineError(2, testCommandString, stdErr)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(testCommandString)
+	require.Error(t, err)
+	require.False(t, wasFileAltered)
 	fileStringAfter := creator.ToString()
 	require.Equal(t, fileStringBefore, fileStringAfter)
 }
