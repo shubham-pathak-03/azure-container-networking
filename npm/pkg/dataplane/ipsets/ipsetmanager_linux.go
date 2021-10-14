@@ -74,6 +74,7 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator, setNames 
 	// - abort the flush and delete call for a set if the set doesn't exist
 	// - if the set is in use by a kernel component, then skip the delete and mark it as a failure
 	for _, setName := range setNames {
+		setName := setName // to appease golint complaints about function literal
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
 				Definition: ioutil.NewErrorDefinition(setDoesntExistPattern),
@@ -87,6 +88,7 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator, setNames 
 	}
 
 	for _, setName := range setNames {
+		setName := setName // to appease golint complaints about function literal
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
 				Definition: ioutil.NewErrorDefinition(setInUseByKernelPattern),
@@ -124,6 +126,7 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 			specs = append(specs, util.IpsetMaxelemName, util.IpsetMaxelemNum)
 		}
 
+		setName := setName // to appease golint complaints about function literal
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
 				Definition: ioutil.NewErrorDefinition(setAlreadyExistsPattern),
@@ -152,13 +155,15 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 				creator.AddLine(sectionID, nil, util.IpsetAppendFlag, set.HashedName, ip) // add IP
 			}
 		} else {
+			setName := setName // to appease golint complaints about function literal
 			for _, member := range set.MemberIPSets {
+				memberName := member.Name // to appease golint complaints about function literal
 				errorHandlers := []*ioutil.LineErrorHandler{
 					{
 						Definition: ioutil.NewErrorDefinition(memberSetDoesntExist),
 						Method:     ioutil.SkipLine,
 						Callback: func() {
-							log.Errorf("was going to add member set %s to list %s, but the member doesn't exist", member.Name, setName)
+							log.Errorf("was going to add member set %s to list %s, but the member doesn't exist", memberName, setName)
 							// TODO handle error
 						},
 					},

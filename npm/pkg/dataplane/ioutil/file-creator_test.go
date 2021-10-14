@@ -246,12 +246,15 @@ func TestGetErrorLineNumber(t *testing.T) {
 	commandString := "test command"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			creator := NewFileCreator(common.NewMockIOShim(nil), 2, tt.args.lineFailurePatterns...)
+			lineFailurePatterns := tt.args.lineFailurePatterns
+			expectedLineNum := tt.expectedLineNum
+			stdErr := tt.args.stdErr
+			creator := NewFileCreator(common.NewMockIOShim(nil), 2, lineFailurePatterns...)
 			for i := 0; i < 15; i++ {
 				creator.AddLine("", nil, fmt.Sprintf("line%d", i))
 			}
-			lineNum := creator.getErrorLineNumber(commandString, tt.args.stdErr)
-			require.Equal(t, tt.expectedLineNum, lineNum)
+			lineNum := creator.getErrorLineNumber(commandString, stdErr)
+			require.Equal(t, expectedLineNum, lineNum)
 		})
 	}
 }
