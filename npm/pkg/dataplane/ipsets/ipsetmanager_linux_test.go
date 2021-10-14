@@ -27,8 +27,8 @@ func createTestSet(name string, setType SetType) *testSet {
 }
 
 var (
-	ipsetRestoreStringSlice = []string{util.Ipset, util.IpsetRestoreFlag}
-	fakeSuccessCommand      = testutils.TestCmd{
+	ipsetRestoreStringSlice   = []string{util.Ipset, util.IpsetRestoreFlag}
+	fakeRestoreSuccessCommand = testutils.TestCmd{
 		Cmd:      ipsetRestoreStringSlice,
 		Stdout:   "success",
 		ExitCode: 0,
@@ -73,7 +73,7 @@ func TestConvertAndDeleteCache(t *testing.T) {
 
 // create all possible SetTypes
 func TestApplyCreationsAndAdds(t *testing.T) {
-	calls := []testutils.TestCmd{fakeSuccessCommand}
+	calls := []testutils.TestCmd{fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	lines := []string{
@@ -131,7 +131,7 @@ func TestApplyCreationsAndAdds(t *testing.T) {
 }
 
 func TestApplyDeletions(t *testing.T) {
-	calls := []testutils.TestCmd{fakeSuccessCommand}
+	calls := []testutils.TestCmd{fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	// Remove members and delete others
@@ -182,7 +182,7 @@ func TestFailureOnCreation(t *testing.T) {
 		Stdout:   "Error in line 3: Set cannot be created: set with the same name already exists",
 		ExitCode: 1,
 	}
-	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
@@ -225,7 +225,7 @@ func TestFailureOnAddToList(t *testing.T) {
 		Stdout:   "Error in line 12: Set to be added/deleted/tested as element does not exist",
 		ExitCode: 1,
 	}
-	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
@@ -289,7 +289,7 @@ func TestFailureOnFlush(t *testing.T) {
 		Stdout:   "Error in line 1: The set with the given name does not exist",
 		ExitCode: 1,
 	}
-	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
@@ -330,7 +330,7 @@ func TestFailureOnDeletion(t *testing.T) {
 		Stdout:   "Error in line 3: Set cannot be destroyed: it is in use by a kernel component",
 		ExitCode: 1,
 	}
-	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
 	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
