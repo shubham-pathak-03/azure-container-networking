@@ -618,10 +618,8 @@ func HoneyCombIpamAdd(nwCfg *cni.NetworkConfig, _ *cniSkel.CmdArgs, subnetPrefix
 			ipConfigv4 := cniTypesCurr.IPConfig{Version: "4", Address: *netv4, Gateway: gatewayIP}
 			log.Printf("[cni-net] ipConfigv4: %+v", ipConfigv4)
 			result.IPs = append(result.IPs, &ipConfigv4)
-			// _, routeNet, _ := net.ParseCIDR("0.0.0.0/32")
-			// result.Routes = append(result.Routes, &cniTypes.Route{Dst: *routeNet, GW: net.ParseIP(goalState.IPV6Gateway)})
-			_, newR, _ := net.ParseCIDR("25.78.229.40/32")
-			result.Routes = append(result.Routes, &cniTypes.Route{Dst: *newR, GW: net.ParseIP("0.0.0.0")})
+			_, routeNet, _ := net.ParseCIDR("0.0.0.0/32")
+			result.Routes = append(result.Routes, &cniTypes.Route{Dst: *routeNet, GW: net.ParseIP(goalState.IPV6Gateway)})			
 			log.Printf("[cni-net] result: %+v", result)
 
 			//setting subnetPrefix
