@@ -245,10 +245,10 @@ func TestGetErrorLineNumber(t *testing.T) {
 
 	commandString := "test command"
 	for _, tt := range tests {
+		lineFailurePatterns := tt.args.lineFailurePatterns
+		expectedLineNum := tt.expectedLineNum
+		stdErr := tt.args.stdErr
 		t.Run(tt.name, func(t *testing.T) {
-			lineFailurePatterns := tt.args.lineFailurePatterns
-			expectedLineNum := tt.expectedLineNum
-			stdErr := tt.args.stdErr
 			creator := NewFileCreator(common.NewMockIOShim(nil), 2, lineFailurePatterns...)
 			for i := 0; i < 15; i++ {
 				creator.AddLine("", nil, fmt.Sprintf("line%d", i))
