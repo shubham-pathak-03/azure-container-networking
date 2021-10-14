@@ -90,7 +90,7 @@ func (iMgr *IPSetManager) DeleteIPSet(name string) {
 	delete(iMgr.setMap, name)
 	metrics.DecNumIPSets()
 	if iMgr.iMgrCfg.ipSetMode == ApplyAllIPSets {
-		iMgr.modifyCacheForKernelRemoval(name)
+		iMgr.modifyCacheForKernelRemoval(name) // FIXME this mode would try to delete an ipset from the kernel if it's never been created in the kernel
 	}
 	// if mode is ApplyOnNeed, the set will not be in the kernel (or will be in the delete cache already) since there are no references
 }
