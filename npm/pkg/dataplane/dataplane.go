@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/Azure/azure-container-networking/common"
+	"github.com/Azure/azure-container-networking/npm/metrics"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ipsets"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/policies"
 	"github.com/Azure/azure-container-networking/npm/util"
@@ -49,6 +50,7 @@ type UpdateNPMPod struct {
 }
 
 func NewDataPlane(nodeName string, ioShim *common.IOShim) *DataPlane {
+	metrics.InitializeAll()
 	return &DataPlane{
 		policyMgr:     policies.NewPolicyManager(ioShim),
 		ipsetMgr:      ipsets.NewIPSetManager(AzureNetworkName, ipsets.ApplyOnNeed, ioShim),
