@@ -27,6 +27,11 @@ func createTestSet(name string, setType SetType) *testSet {
 }
 
 var (
+	iMgrApplyAllCfg = &IPSetManagerCfg{
+		IPSetMode:   ApplyAllIPSets,
+		NetworkName: "",
+	}
+
 	ipsetRestoreStringSlice   = []string{util.Ipset, util.IpsetRestoreFlag}
 	fakeRestoreSuccessCommand = testutils.TestCmd{
 		Cmd:      ipsetRestoreStringSlice,
@@ -45,9 +50,9 @@ var (
 )
 
 func TestDestroyNPMIPSets(t *testing.T) {
-	calls := []testutils.TestCmd{}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
-	require.NoError(t, iMgr.reboot())
+	calls := []testutils.TestCmd{} // TODO
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
+	require.NoError(t, iMgr.resetIPSets())
 }
 
 func TestConvertAndDeleteCache(t *testing.T) {
@@ -76,7 +81,7 @@ func TestConvertAndDeleteCache(t *testing.T) {
 // create all possible SetTypes
 func TestApplyCreationsAndAdds(t *testing.T) {
 	calls := []testutils.TestCmd{fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	lines := []string{
 		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
@@ -134,7 +139,7 @@ func TestApplyCreationsAndAdds(t *testing.T) {
 
 func TestApplyDeletions(t *testing.T) {
 	calls := []testutils.TestCmd{fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	// Remove members and delete others
 	iMgr.CreateIPSet(testNSSet.metadata)
@@ -185,7 +190,7 @@ func TestFailureOnCreation(t *testing.T) {
 		ExitCode: 1,
 	}
 	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
@@ -228,7 +233,7 @@ func TestFailureOnAddToList(t *testing.T) {
 		ExitCode: 1,
 	}
 	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
@@ -292,7 +297,7 @@ func TestFailureOnFlush(t *testing.T) {
 		ExitCode: 1,
 	}
 	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
@@ -333,7 +338,7 @@ func TestFailureOnDeletion(t *testing.T) {
 		ExitCode: 1,
 	}
 	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeRestoreSuccessCommand}
-	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	iMgr := NewIPSetManager(iMgrApplyAllCfg, common.NewMockIOShim(calls))
 
 	iMgr.CreateIPSet(testNSSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))

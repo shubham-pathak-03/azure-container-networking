@@ -19,8 +19,7 @@ const (
 	memberSetDoesntExist           = "Set to be added/deleted/tested as element does not exist"
 )
 
-// TODO make corresponding function in generic ipsetmanager
-func (iMgr *IPSetManager) reboot() error {
+func (iMgr *IPSetManager) resetIPSets() error {
 	// called on failure or when NPM is created
 	// so no ipset cache. need to use ipset list like in ipsm.go
 
@@ -31,7 +30,7 @@ func (iMgr *IPSetManager) reboot() error {
 }
 
 // don't need networkID
-func (iMgr *IPSetManager) applyIPSets(_ string) error {
+func (iMgr *IPSetManager) applyIPSets() error {
 	toDeleteSetNames := convertAndDeleteCache(iMgr.toDeleteCache)
 	toAddOrUpdateSetNames := convertAndDeleteCache(iMgr.toAddOrUpdateCache)
 	creator := iMgr.getFileCreator(maxTryCount, toDeleteSetNames, toAddOrUpdateSetNames)
@@ -79,7 +78,10 @@ func (iMgr *IPSetManager) handleDeletions(creator *ioutil.FileCreator, setNames 
 			{
 				Definition: ioutil.NewErrorDefinition(setDoesntExistPattern),
 				Method:     ioutil.AbortSection,
-				Callback:   func() { log.Logf("was going to delete set %s but it doesn't exist", setName) },
+				Callback: func() {
+					// no action needed since we expect that it's gone after applyIPSets()
+					log.Logf("was going to delete set %s but it doesn't exist", setName)
+				},
 			},
 		}
 		sectionID := getSectionID(deletionPrefix, setName)

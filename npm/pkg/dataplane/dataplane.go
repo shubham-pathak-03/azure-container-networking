@@ -18,6 +18,11 @@ const (
 	AzureNetworkName = "azure"
 )
 
+var iMgrDefaultCfg = &ipsets.IPSetManagerCfg{
+	IPSetMode:   ipsets.ApplyOnNeed,
+	NetworkName: AzureNetworkName,
+}
+
 type DataPlane struct {
 	policyMgr *policies.PolicyManager
 	ipsetMgr  *ipsets.IPSetManager
@@ -53,7 +58,7 @@ func NewDataPlane(nodeName string, ioShim *common.IOShim) *DataPlane {
 	metrics.InitializeAll()
 	return &DataPlane{
 		policyMgr:     policies.NewPolicyManager(ioShim),
-		ipsetMgr:      ipsets.NewIPSetManager(AzureNetworkName, ipsets.ApplyOnNeed, ioShim),
+		ipsetMgr:      ipsets.NewIPSetManager(iMgrDefaultCfg, ioShim),
 		endpointCache: make(map[string]*NPMEndpoint),
 		nodeName:      nodeName,
 		ioShim:        ioShim,
