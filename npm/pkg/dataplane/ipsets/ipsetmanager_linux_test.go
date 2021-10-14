@@ -45,7 +45,9 @@ var (
 )
 
 func TestDestroyNPMIPSets(t *testing.T) {
-	// TODO
+	calls := []testutils.TestCmd{}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+	require.NoError(t, iMgr.reboot())
 }
 
 func TestConvertAndDeleteCache(t *testing.T) {

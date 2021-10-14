@@ -20,7 +20,7 @@ const (
 )
 
 // TODO make corresponding function in generic ipsetmanager
-func destroyNPMIPSets() error {
+func (iMgr *IPSetManager) reboot() error {
 	// called on failure or when NPM is created
 	// so no ipset cache. need to use ipset list like in ipsm.go
 

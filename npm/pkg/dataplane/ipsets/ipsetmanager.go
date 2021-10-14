@@ -50,6 +50,16 @@ func NewIPSetManager(networkName string, ipSetMode IPSetMode, ioShim *common.IOS
 	}
 }
 
+func (iMgr *IPSetManager) Reboot() error {
+	iMgr.Lock()
+	defer iMgr.Unlock()
+	err := iMgr.reboot()
+	if err != nil {
+		return fmt.Errorf("error while rebooting ipsetmanager: %w", err)
+	}
+	return nil
+}
+
 func (iMgr *IPSetManager) CreateIPSet(setMetadata *IPSetMetadata) {
 	iMgr.Lock()
 	defer iMgr.Unlock()
