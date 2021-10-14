@@ -20,7 +20,7 @@ const (
 )
 
 var iMgrApplyOnNeedCfg = &IPSetManagerCfg{
-	IPSetMode:   ApplyAllIPSets,
+	IPSetMode:   ApplyOnNeed,
 	NetworkName: "azure",
 }
 
