@@ -13,7 +13,7 @@ const (
 	deletionPrefix                 = "delete"
 	creationPrefix                 = "create"
 	ipsetRestoreLineFailurePattern = "Error in line (\\d+):"
-	setExistsPattern               = "Set cannot be created: set with the same name already exists"
+	setAlreadyExistsPattern        = "Set cannot be created: set with the same name already exists"
 	setDoesntExistPattern          = "The set with the given name does not exist"
 	setInUseByKernelPattern        = "Set cannot be destroyed: it is in use by a kernel component"
 	memberSetDoesntExist           = "Set to be added/deleted/tested as element does not exist"
@@ -32,8 +32,8 @@ func destroyNPMIPSets() error {
 
 // don't need networkID
 func (iMgr *IPSetManager) applyIPSets(networkID string) error {
-	toDeleteSetNames := convertCacheToSliceAndDeleteCache(iMgr.toDeleteCache)
-	toAddOrUpdateSetNames := convertCacheToSliceAndDeleteCache(iMgr.toAddOrUpdateCache)
+	toDeleteSetNames := convertAndDeleteCache(iMgr.toDeleteCache)
+	toAddOrUpdateSetNames := convertAndDeleteCache(iMgr.toAddOrUpdateCache)
 	creator := iMgr.getFileCreator(maxTryCount, toDeleteSetNames, toAddOrUpdateSetNames)
 	err := creator.RunCommandWithFile(util.Ipset, util.IpsetRestoreFlag)
 	if err != nil {
@@ -42,7 +42,7 @@ func (iMgr *IPSetManager) applyIPSets(networkID string) error {
 	return nil
 }
 
-func convertCacheToSliceAndDeleteCache(cache map[string]struct{}) []string {
+func convertAndDeleteCache(cache map[string]struct{}) []string {
 	result := make([]string, len(cache))
 	i := 0
 	for setName := range cache {
@@ -62,7 +62,7 @@ func convertCacheToSliceAndDeleteCache(cache map[string]struct{}) []string {
 // but we can handle this in UTs with sorting.
 func (iMgr *IPSetManager) getFileCreator(maxTryCount int, toDeleteSetNames, toAddOrUpdateSetNames []string) *ioutil.FileCreator {
 	creator := ioutil.NewFileCreator(iMgr.ioShim, maxTryCount, ipsetRestoreLineFailurePattern)
-	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO??
+	// creator.AddErrorToRetryOn(ioutil.NewErrorDefinition("something")) // TODO add file-level errors?
 	iMgr.handleDeletions(creator, toDeleteSetNames)
 	iMgr.handleAddOrUpdates(creator, toAddOrUpdateSetNames)
 	return creator
@@ -107,6 +107,8 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 	// create all sets first
 	// error handling:
 	// - abort the create, flush, and add calls if create doesn't work
+	//   Won't abort adding the set to a list. Will need another retry to handle that
+	//   TODO change this behavior?
 	for _, setName := range setNames {
 		set := iMgr.setMap[setName]
 
@@ -124,7 +126,7 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 
 		errorHandlers := []*ioutil.LineErrorHandler{
 			{
-				Definition: ioutil.NewErrorDefinition(setExistsPattern),
+				Definition: ioutil.NewErrorDefinition(setAlreadyExistsPattern),
 				Method:     ioutil.AbortSection,
 				Callback: func() {
 					log.Errorf("was going to add/update set %s but couldn't create the set", setName)
@@ -143,8 +145,6 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 		set := iMgr.setMap[setName]
 		sectionID := getSectionID(creationPrefix, setName)
 		creator.AddLine(sectionID, nil, util.IpsetFlushFlag, set.HashedName) // flush set (no error handler needed)
-
-		// debugPrintSetContents(set) // FIXME remove
 
 		if set.Kind == HashSet {
 			for ip := range set.IPPodKey {
@@ -171,28 +171,4 @@ func (iMgr *IPSetManager) handleAddOrUpdates(creator *ioutil.FileCreator, setNam
 
 func getSectionID(prefix, setName string) string {
 	return fmt.Sprintf("%s-%s", prefix, setName)
-}
-
-func (iMgr *IPSetManager) debugPrintCaches() {
-	fmt.Println("WHOLE CACHE")
-	for _, set := range iMgr.setMap {
-		fmt.Println(set)
-	}
-	fmt.Println("DIRTY CACHE")
-	fmt.Println(iMgr.toAddOrUpdateCache)
-	fmt.Println("DELETE CACHE")
-	fmt.Println(iMgr.toDeleteCache)
-}
-
-func debugPrintRestoreFile(creator *ioutil.FileCreator) {
-	fmt.Println("RESTORE FILE")
-	fmt.Println(creator.ToString())
-}
-
-func debugPrintSetContents(set *IPSet) {
-	fmt.Printf("DEBUG-ME\nname: %s\nkind: %s\npodip: \n", set.Name, set.Kind)
-	fmt.Println(set.IPPodKey)
-	fmt.Println("members: ")
-	fmt.Println(set.MemberIPSets)
-	fmt.Println()
 }
