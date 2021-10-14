@@ -10,7 +10,6 @@ import (
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
 	"github.com/Azure/azure-container-networking/npm/util"
 	testutils "github.com/Azure/azure-container-networking/test/utils"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,8 +27,9 @@ func createTestSet(name string, setType SetType) *testSet {
 }
 
 var (
-	fakeSuccessCommand = testutils.TestCmd{
-		Cmd:      []string{util.Ipset, util.IpsetRestoreFlag},
+	ipsetRestoreStringSlice = []string{util.Ipset, util.IpsetRestoreFlag}
+	fakeSuccessCommand      = testutils.TestCmd{
+		Cmd:      ipsetRestoreStringSlice,
 		Stdout:   "success",
 		ExitCode: 0,
 	}
@@ -42,33 +42,39 @@ var (
 	testKeyNSList       = createTestSet("test-keyNS-list", KeyLabelOfNameSpace)
 	testKVNSList        = createTestSet("test-kvNS-list", KeyValueLabelOfNameSpace)
 	testNestedLabelList = createTestSet("test-nestedlabel-list", NestedLabelOfPod)
-
-	toAddOrUpdateSetNames = []string{
-		testNSSet.metadata.GetPrefixName(),
-		testKeyPodSet.metadata.GetPrefixName(),
-		testKVPodSet.metadata.GetPrefixName(),
-		testNamedportSet.metadata.GetPrefixName(),
-		testCIDRSet.metadata.GetPrefixName(),
-		testKeyNSList.metadata.GetPrefixName(),
-		testKVNSList.metadata.GetPrefixName(),
-		testNestedLabelList.metadata.GetPrefixName(),
-	}
 )
 
 func TestDestroyNPMIPSets(t *testing.T) {
 	// TODO
 }
 
-// TODO perform tests with fexec
-// commenting out stuff for list type becaues the set type isn't supported on my local machine
+func TestConvertAndDeleteCache(t *testing.T) {
+	cache := map[string]struct{}{
+		"a": {},
+		"b": {},
+		"c": {},
+		"d": {},
+	}
+	slice := convertAndDeleteCache(cache)
+	require.Equal(t, 0, len(cache))
+	require.Equal(t, 4, len(slice))
+	for _, item := range []string{"a", "b", "c", "d"} {
+		success := false
+		for _, sliceItem := range slice {
+			if item == sliceItem {
+				success = true
+			}
+		}
+		if !success {
+			require.FailNowf(t, "%s not in the slice", item)
+		}
+	}
+}
+
+// create all possible SetTypes
 func TestApplyCreationsAndAdds(t *testing.T) {
 	calls := []testutils.TestCmd{fakeSuccessCommand}
-	iMgr := NewIPSetManager("test-node", common.NewMockIOShim(calls))
-
-	createSetsTestHelper(t, iMgr)
-
-	creator := iMgr.getFileCreator(1, nil, toAddOrUpdateSetNames)
-	actualFileString := getSortedFileString(creator)
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
 
 	lines := []string{
 		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
@@ -90,45 +96,276 @@ func TestApplyCreationsAndAdds(t *testing.T) {
 	lines = append(lines, getSortedLines(testNestedLabelList)...)
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
-	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
-	require.False(t, wasFileAltered)
-	require.NoError(t, err)
-}
-
-func createSetsTestHelper(t *testing.T, iMgr *IPSetManager) {
-	// TODO remove addReference() calls and use IPSetMode ApplyAllIPSets
 	iMgr.CreateIPSet(testNSSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
-	require.NoError(t, iMgr.AddReference(testNSSet.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testKeyPodSet.metadata)
 	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testKeyPodSet.metadata}, "10.0.0.5", "c"))
-	require.NoError(t, iMgr.AddReference(testKeyPodSet.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testKVPodSet.metadata)
-	require.NoError(t, iMgr.AddReference(testKVPodSet.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testNamedportSet.metadata)
-	require.NoError(t, iMgr.AddReference(testNamedportSet.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testCIDRSet.metadata)
-	require.NoError(t, iMgr.AddReference(testCIDRSet.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testKeyNSList.metadata)
 	require.NoError(t, iMgr.AddToList(testKeyNSList.metadata, []*IPSetMetadata{testNSSet.metadata, testKeyPodSet.metadata}))
-	require.NoError(t, iMgr.AddReference(testKeyNSList.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testKVNSList.metadata)
 	require.NoError(t, iMgr.AddToList(testKVNSList.metadata, []*IPSetMetadata{testKVPodSet.metadata}))
-	require.NoError(t, iMgr.AddReference(testKVNSList.metadata.GetPrefixName(), "reference1", NetPolType))
-
 	iMgr.CreateIPSet(testNestedLabelList.metadata)
-	require.NoError(t, iMgr.AddReference(testNestedLabelList.metadata.GetPrefixName(), "reference1", NetPolType))
-
+	toAddOrUpdateSetNames := []string{
+		testNSSet.metadata.GetPrefixName(),
+		testKeyPodSet.metadata.GetPrefixName(),
+		testKVPodSet.metadata.GetPrefixName(),
+		testNamedportSet.metadata.GetPrefixName(),
+		testCIDRSet.metadata.GetPrefixName(),
+		testKeyNSList.metadata.GetPrefixName(),
+		testKVNSList.metadata.GetPrefixName(),
+		testNestedLabelList.metadata.GetPrefixName(),
+	}
 	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+
+	creator := iMgr.getFileCreator(1, nil, toAddOrUpdateSetNames)
+	actualFileString := getSortedFileString(creator)
+
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
 }
+
+func TestApplyDeletions(t *testing.T) {
+	calls := []testutils.TestCmd{fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+
+	// Remove members and delete others
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
+	iMgr.CreateIPSet(testKeyPodSet.metadata)
+	iMgr.CreateIPSet(testKeyNSList.metadata)
+	require.NoError(t, iMgr.AddToList(testKeyNSList.metadata, []*IPSetMetadata{testNSSet.metadata, testKeyPodSet.metadata}))
+	require.NoError(t, iMgr.RemoveFromSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
+	require.NoError(t, iMgr.RemoveFromList(testKeyNSList.metadata, []*IPSetMetadata{testKeyPodSet.metadata}))
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+	iMgr.CreateIPSet(testNestedLabelList.metadata)
+	iMgr.DeleteIPSet(testNestedLabelList.metadata.GetPrefixName())
+
+	toDeleteSetNames := []string{testCIDRSet.metadata.GetPrefixName(), testNestedLabelList.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName(), testKeyPodSet.metadata.GetPrefixName(), testKeyNSList.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	creator := iMgr.getFileCreator(1, toDeleteSetNames, toAddOrUpdateSetNames)
+	actualFileString := getSortedFileString(creator)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-F %s", testNestedLabelList.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testNestedLabelList.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testKeyPodSet.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKeyNSList.hashedName),
+	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
+	lines = append(lines, getSortedLines(testKeyPodSet)...)
+	lines = append(lines, getSortedLines(testKeyNSList, testNSSet.hashedName)...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
+}
+
+// TODO test that a reconcile list is updated
+func TestFailureOnCreation(t *testing.T) {
+	setAlreadyExistsCommand := testutils.TestCmd{
+		Cmd:      ipsetRestoreStringSlice,
+		Stdout:   "Error in line 3: Set cannot be created: set with the same name already exists",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
+	iMgr.CreateIPSet(testKeyPodSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testKeyPodSet.metadata}, "10.0.0.5", "c"))
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+
+	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName(), testKeyPodSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	toDeleteSetNames := []string{testCIDRSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	creator := iMgr.getFileCreator(2, toDeleteSetNames, toAddOrUpdateSetNames)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testKeyPodSet.hashedName),
+	}
+	lines = append(lines, getSortedLines(testKeyPodSet, "10.0.0.5")...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	actualFileString := getSortedFileString(creator)
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
+}
+
+// TODO test that a reconcile list is updated
+func TestFailureOnAddToList(t *testing.T) {
+	// This exact scenario wouldn't occur. This error happens when the cache is out of date with the kernel.
+	setAlreadyExistsCommand := testutils.TestCmd{
+		Cmd:      ipsetRestoreStringSlice,
+		Stdout:   "Error in line 12: Set to be added/deleted/tested as element does not exist",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	iMgr.CreateIPSet(testKeyPodSet.metadata)
+	iMgr.CreateIPSet(testKeyNSList.metadata)
+	require.NoError(t, iMgr.AddToList(testKeyNSList.metadata, []*IPSetMetadata{testNSSet.metadata, testKeyPodSet.metadata}))
+	iMgr.CreateIPSet(testKVNSList.metadata)
+	require.NoError(t, iMgr.AddToList(testKVNSList.metadata, []*IPSetMetadata{testNSSet.metadata}))
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+
+	toAddOrUpdateSetNames := []string{
+		testNSSet.metadata.GetPrefixName(),
+		testKeyPodSet.metadata.GetPrefixName(),
+		testKeyNSList.metadata.GetPrefixName(),
+		testKVNSList.metadata.GetPrefixName(),
+	}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	toDeleteSetNames := []string{testCIDRSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	creator := iMgr.getFileCreator(2, toDeleteSetNames, toAddOrUpdateSetNames)
+	originalFileString := creator.ToString()
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testKeyPodSet.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKeyNSList.hashedName),
+		fmt.Sprintf("-N %s -exist setlist", testKVNSList.hashedName),
+	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
+	lines = append(lines, getSortedLines(testKeyPodSet)...)                                                 // line 9
+	lines = append(lines, getSortedLines(testKeyNSList, testNSSet.hashedName, testKeyPodSet.hashedName)...) // lines 10, 11, 12
+	lines = append(lines, getSortedLines(testKVNSList, testNSSet.hashedName)...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	// need this because adds are nondeterminstic
+	badLine := strings.Split(originalFileString, "\n")[12-1]
+	if badLine != fmt.Sprintf("-A %s %s", testKeyNSList.hashedName, testNSSet.hashedName) && badLine != fmt.Sprintf("-A %s %s", testKeyNSList.hashedName, testKeyPodSet.hashedName) {
+		require.FailNow(t, "incorrect failed line")
+	}
+	expectedFileString = strings.ReplaceAll(expectedFileString, badLine+"\n", "")
+
+	actualFileString := getSortedFileString(creator)
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
+}
+
+// TODO test that a reconcile list is updated
+func TestFailureOnFlush(t *testing.T) {
+	// This exact scenario wouldn't occur. This error happens when the cache is out of date with the kernel.
+	setAlreadyExistsCommand := testutils.TestCmd{
+		Cmd:      ipsetRestoreStringSlice,
+		Stdout:   "Error in line 1: The set with the given name does not exist",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	iMgr.CreateIPSet(testKVPodSet.metadata)
+	iMgr.DeleteIPSet(testKVPodSet.metadata.GetPrefixName())
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+
+	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	toDeleteSetNames := []string{testKVPodSet.metadata.GetPrefixName(), testCIDRSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	creator := iMgr.getFileCreator(2, toDeleteSetNames, toAddOrUpdateSetNames)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	actualFileString := getSortedFileString(creator)
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
+}
+
+// TODO test that a reconcile list is updated
+func TestFailureOnDeletion(t *testing.T) {
+	setAlreadyExistsCommand := testutils.TestCmd{
+		Cmd:      ipsetRestoreStringSlice,
+		Stdout:   "Error in line 3: Set cannot be destroyed: it is in use by a kernel component",
+		ExitCode: 1,
+	}
+	calls := []testutils.TestCmd{setAlreadyExistsCommand, fakeSuccessCommand}
+	iMgr := NewIPSetManager("test-node", ApplyAllIPSets, common.NewMockIOShim(calls))
+
+	iMgr.CreateIPSet(testNSSet.metadata)
+	require.NoError(t, iMgr.AddToSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.0", "a"))
+	iMgr.CreateIPSet(testKVPodSet.metadata)
+	iMgr.DeleteIPSet(testKVPodSet.metadata.GetPrefixName())
+	iMgr.CreateIPSet(testCIDRSet.metadata)
+	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
+
+	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
+	toDeleteSetNames := []string{testKVPodSet.metadata.GetPrefixName(), testCIDRSet.metadata.GetPrefixName()}
+	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
+	creator := iMgr.getFileCreator(2, toDeleteSetNames, toAddOrUpdateSetNames)
+	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.Error(t, err)
+	require.True(t, wasFileAltered)
+
+	lines := []string{
+		fmt.Sprintf("-F %s", testKVPodSet.hashedName),
+		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
+		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
+	}
+	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
+	expectedFileString := strings.Join(lines, "\n") + "\n"
+
+	actualFileString := getSortedFileString(creator)
+	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
+	require.NoError(t, err)
+	require.False(t, wasFileAltered)
+}
+
+// TODO if we add file-level error handlers, add tests for them
 
 func assertEqualContentsTestHelper(t *testing.T, setNames []string, cache map[string]struct{}) {
 	require.Equal(t, len(setNames), len(cache), "cache is different than list of set names")
@@ -193,54 +430,5 @@ func assertEqualFileStrings(t *testing.T, expectedFileString, actualFileString s
 	for _, line := range strings.Split(actualFileString, "\n") {
 		fmt.Println(line)
 	}
-	require.FailNow(t, "got unexpected file string (see print contents above")
+	require.FailNow(t, "got unexpected file string (see print contents above)")
 }
-
-func TestApplyDeletions(t *testing.T) {
-	calls := []testutils.TestCmd{fakeSuccessCommand, fakeSuccessCommand}
-	iMgr := NewIPSetManager("test-node", common.NewMockIOShim(calls))
-
-	createSetsTestHelper(t, iMgr)
-	require.NoError(t, iMgr.ApplyIPSets(""))
-
-	// Remove members and delete others
-	// TODO remove deleteReference() calls and use IPSetMode ApplyAllIPSets
-	require.NoError(t, iMgr.RemoveFromSet([]*IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"))
-	require.NoError(t, iMgr.RemoveFromList(testKeyNSList.metadata, []*IPSetMetadata{testKeyPodSet.metadata}))
-
-	require.NoError(t, iMgr.DeleteReference(testCIDRSet.metadata.GetPrefixName(), "reference1", NetPolType))
-	iMgr.DeleteIPSet(testCIDRSet.metadata.GetPrefixName())
-
-	require.NoError(t, iMgr.DeleteReference(testNestedLabelList.metadata.GetPrefixName(), "reference1", NetPolType))
-	iMgr.DeleteIPSet(testNestedLabelList.metadata.GetPrefixName())
-
-	toDeleteSetNames := []string{testCIDRSet.metadata.GetPrefixName(), testNestedLabelList.metadata.GetPrefixName()}
-	assertEqualContentsTestHelper(t, toDeleteSetNames, iMgr.toDeleteCache)
-	toAddOrUpdateSetNames := []string{testNSSet.metadata.GetPrefixName(), testKeyNSList.metadata.GetPrefixName()}
-	assertEqualContentsTestHelper(t, toAddOrUpdateSetNames, iMgr.toAddOrUpdateCache)
-	creator := iMgr.getFileCreator(1, toDeleteSetNames, toAddOrUpdateSetNames)
-	actualFileString := getSortedFileString(creator)
-
-	lines := []string{
-		fmt.Sprintf("-F %s", testCIDRSet.hashedName),
-		fmt.Sprintf("-F %s", testNestedLabelList.hashedName),
-		fmt.Sprintf("-X %s", testCIDRSet.hashedName),
-		fmt.Sprintf("-X %s", testNestedLabelList.hashedName),
-		fmt.Sprintf("-N %s -exist nethash", testNSSet.hashedName),
-		fmt.Sprintf("-N %s -exist setlist", testKeyNSList.hashedName),
-	}
-	lines = append(lines, getSortedLines(testNSSet, "10.0.0.0")...)
-	lines = append(lines, getSortedLines(testKeyNSList, testNSSet.hashedName)...)
-	expectedFileString := strings.Join(lines, "\n") + "\n"
-
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
-	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
-	require.False(t, wasFileAltered)
-	require.NoError(t, err)
-}
-
-/*
-	want to test:
-	file level error handlers (if there are any)
-	all line level handlers (assert the file changes as we want it to) <-- need to rework the file-creator to get the file after retry?
-*/
