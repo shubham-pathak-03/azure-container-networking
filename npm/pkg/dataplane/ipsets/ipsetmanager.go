@@ -38,10 +38,10 @@ type ipSetManagerCfg struct {
 	networkName string
 }
 
-func NewIPSetManager(networkName string, ioShim *common.IOShim) *IPSetManager {
+func NewIPSetManager(networkName string, ipSetMode IPSetMode, ioShim *common.IOShim) *IPSetManager {
 	return &IPSetManager{
 		iMgrCfg: &ipSetManagerCfg{
-			ipSetMode:   ApplyOnNeed,
+			ipSetMode:   ipSetMode,
 			networkName: networkName,
 		},
 		setMap:             make(map[string]*IPSet),
@@ -60,6 +60,9 @@ func (iMgr *IPSetManager) CreateIPSet(setMetadata *IPSetMetadata) {
 	}
 	iMgr.setMap[prefixedName] = NewIPSet(setMetadata)
 	metrics.IncNumIPSets()
+	if iMgr.iMgrCfg.ipSetMode == ApplyAllIPSets {
+		iMgr.modifyCacheForKernelCreation(prefixedName)
+	}
 }
 
 // DeleteIPSet expects the prefixed ipset name
@@ -75,9 +78,12 @@ func (iMgr *IPSetManager) DeleteIPSet(name string) {
 		return
 	}
 
-	// the set will not be in the kernel since there are no references, so there's no need to update the dirty cache
 	delete(iMgr.setMap, name)
 	metrics.DecNumIPSets()
+	if iMgr.iMgrCfg.ipSetMode == ApplyAllIPSets {
+		iMgr.modifyCacheForKernelRemoval(name)
+	}
+	// if mode is ApplyOnNeed, the set will not be in the kernel (or will be in the delete cache already) since there are no references
 }
 
 // GetIPSet needs the prefixed ipset name
@@ -106,7 +112,7 @@ func (iMgr *IPSetManager) AddReference(setName, referenceName string, referenceT
 	if referenceType == SelectorType && !set.canSetBeSelectorIPSet() {
 		return npmerrors.Errorf(npmerrors.AddSelectorReference, false, fmt.Sprintf("ipset %s is not a selector ipset it is of type %s", setName, set.Type.String()))
 	}
-	wasInKernel := set.shouldBeInKernel()
+	wasInKernel := set.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode)
 	set.addReference(referenceName, referenceType)
 	if !wasInKernel {
 		iMgr.modifyCacheForKernelCreation(set.Name)
@@ -132,9 +138,9 @@ func (iMgr *IPSetManager) DeleteReference(setName, referenceName string, referen
 	}
 
 	set := iMgr.setMap[setName]
-	wasInKernel := set.shouldBeInKernel() // required because the set may have 0 references i.e. this reference doesn't exist
+	wasInKernel := set.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode) // required because the set may have 0 references i.e. this reference doesn't exist
 	set.deleteReference(referenceName, referenceType)
-	if wasInKernel && !set.shouldBeInKernel() {
+	if wasInKernel && !set.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode) {
 		iMgr.modifyCacheForKernelRemoval(set.Name)
 
 		// if set.Kind == HashSet, then this for loop will do nothing
@@ -321,7 +327,7 @@ func (iMgr *IPSetManager) modifyCacheForKernelCreation(setName string) {
 }
 
 func (iMgr *IPSetManager) incKernelReferCountAndModifyCache(member *IPSet) {
-	wasInKernel := member.shouldBeInKernel()
+	wasInKernel := member.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode)
 	member.incKernelReferCount()
 	if !wasInKernel {
 		iMgr.modifyCacheForKernelCreation(member.Name)
@@ -342,7 +348,7 @@ func (iMgr *IPSetManager) modifyCacheForKernelRemoval(setName string) {
 
 func (iMgr *IPSetManager) decKernelReferCountAndModifyCache(member *IPSet) {
 	member.decKernelReferCount()
-	if !member.shouldBeInKernel() {
+	if !member.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode) {
 		iMgr.modifyCacheForKernelRemoval(member.Name)
 	}
 }
@@ -364,7 +370,7 @@ func (iMgr *IPSetManager) checkForIPUpdateErrors(setNames []*IPSetMetadata, npmE
 
 func (iMgr *IPSetManager) modifyCacheForKernelMemberUpdate(setName string) {
 	set := iMgr.setMap[setName]
-	if set.shouldBeInKernel() {
+	if set.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode) {
 		iMgr.toAddOrUpdateCache[setName] = struct{}{}
 		/*
 			TODO kernel-based prometheus metrics
@@ -419,7 +425,7 @@ func (iMgr *IPSetManager) addMemberIPSet(listName, memberName string) {
 	list.MemberIPSets[memberName] = member
 	member.incIPSetReferCount()
 	metrics.AddEntryToIPSet(list.Name)
-	listIsInKernel := list.shouldBeInKernel()
+	listIsInKernel := list.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode)
 	if listIsInKernel {
 		iMgr.incKernelReferCountAndModifyCache(member)
 	}
@@ -435,7 +441,7 @@ func (iMgr *IPSetManager) removeMemberIPSet(listName, memberName string) {
 	delete(list.MemberIPSets, member.Name)
 	member.decIPSetReferCount()
 	metrics.RemoveEntryFromIPSet(list.Name)
-	listIsInKernel := list.shouldBeInKernel()
+	listIsInKernel := list.shouldBeInKernel(iMgr.iMgrCfg.ipSetMode)
 	if listIsInKernel {
 		iMgr.decKernelReferCountAndModifyCache(member)
 	}

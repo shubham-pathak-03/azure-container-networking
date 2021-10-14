@@ -321,8 +321,8 @@ func (set *IPSet) deleteReference(referenceName string, referenceType ReferenceT
 	}
 }
 
-func (set *IPSet) shouldBeInKernel() bool {
-	return set.usedByNetPol() || set.referencedInKernel()
+func (set *IPSet) shouldBeInKernel(mode IPSetMode) bool {
+	return set.usedByNetPol() || set.referencedInKernel() || mode == ApplyAllIPSets
 }
 
 func (set *IPSet) canBeDeleted() bool {

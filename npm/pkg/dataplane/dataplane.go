@@ -50,7 +50,7 @@ type UpdateNPMPod struct {
 func NewDataPlane(nodeName string, ioShim *common.IOShim) *DataPlane {
 	return &DataPlane{
 		policyMgr:     policies.NewPolicyManager(ioShim),
-		ipsetMgr:      ipsets.NewIPSetManager(AzureNetworkName, ioShim),
+		ipsetMgr:      ipsets.NewIPSetManager(AzureNetworkName, ipsets.ApplyOnNeed, ioShim),
 		endpointCache: make(map[string]*NPMEndpoint),
 		nodeName:      nodeName,
 		ioShim:        ioShim,
