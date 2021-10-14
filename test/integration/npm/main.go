@@ -14,21 +14,24 @@ type testSet struct {
 
 func createTestSet(name string, setType ipsets.SetType) *testSet {
 	set := &testSet{
-		metadata: &ipsets.IPSetMetadata{name, setType},
+		metadata: &ipsets.IPSetMetadata{
+			Name: name,
+			Type: setType,
+		},
 	}
 	set.hashedName = util.GetHashedName(set.metadata.GetPrefixName())
 	return set
 }
 
 var (
-	testNSSet           = createTestSet("test-ns-set", ipsets.NameSpace)
-	testKeyPodSet       = createTestSet("test-keyPod-set", ipsets.KeyLabelOfPod)
-	testKVPodSet        = createTestSet("test-kvPod-set", ipsets.KeyValueLabelOfPod)
-	testNamedportSet    = createTestSet("test-namedport-set", ipsets.NamedPorts)
-	testCIDRSet         = createTestSet("test-cidr-set", ipsets.CIDRBlocks)
-	testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
-	testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
-	testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
+	testNSSet        = createTestSet("test-ns-set", ipsets.NameSpace)
+	testKeyPodSet    = createTestSet("test-keyPod-set", ipsets.KeyLabelOfPod)
+	testKVPodSet     = createTestSet("test-kvPod-set", ipsets.KeyValueLabelOfPod)
+	testNamedportSet = createTestSet("test-namedport-set", ipsets.NamedPorts)
+	testCIDRSet      = createTestSet("test-cidr-set", ipsets.CIDRBlocks)
+	// testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
+	// testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
+	// testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
 )
 
 func main() {
