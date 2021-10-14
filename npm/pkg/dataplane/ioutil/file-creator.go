@@ -181,17 +181,17 @@ func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args 
 	// begin the retry logic
 	if creator.hasFileLevelError(stdErr) {
 		log.Logf("detected a file-level error while running command [%s]", commandString)
-		return false, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+		return false, fmt.Errorf("file-level error: %w", err) // using fmt.Errorf to appease go lint
 	}
 
 	// no file-level error, so handle line-level error if there is one
 	lineNum := creator.getErrorLineNumber(commandString, stdErr)
 	if lineNum == -1 {
 		// can't detect a line number error
-		return false, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+		return false, fmt.Errorf("undetected line number error: %w", err) // using fmt.Errorf to appease go lint
 	}
 	wasFileAltered := creator.handleLineError(lineNum, commandString, stdErr)
-	return wasFileAltered, fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
+	return wasFileAltered, fmt.Errorf("tried to handle line number error: %w", err) // using fmt.Errorf to appease go lint
 }
 
 func (creator *FileCreator) hasNoMoreRetries() bool {
