@@ -9,6 +9,7 @@ import (
 
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/log"
+	npmerrors "github.com/Azure/azure-container-networking/npm/util/errors"
 )
 
 // TODO add file creator log prefix
@@ -128,10 +129,11 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 		return nil
 	}
 	for {
-		if creator.hasNoMoreRetries() {
-			return fmt.Errorf("%w", err) // using fmt.Errorf to appease go lint
-		}
 		commandString := cmd + " " + strings.Join(args, " ")
+		if creator.hasNoMoreRetries() {
+			// TODO conditionally specify as retriable?
+			return npmerrors.Errorf(npmerrors.RunFileCreator, false, fmt.Sprintf("failed to run command [%s] with error: %v", commandString, err))
+		}
 		if wasFileAltered {
 			fileString = creator.ToString()
 			log.Logf("rerunning command [%s] with new file:\n%s", commandString, fileString)
@@ -151,14 +153,14 @@ func (creator *FileCreator) RunCommandWithFile(cmd string, args ...string) error
 // For automatic retrying and proper logging, use RunCommandWithFile.
 // This method can be used for external testing of file creator contents after each run.
 func (creator *FileCreator) RunCommandOnceWithFile(cmd string, args ...string) (bool, error) {
-	commandString := cmd + " " + strings.Join(args, " ")
 	if creator.hasNoMoreRetries() {
-		return false, fmt.Errorf("reached max try count %d for command [%s]", creator.tryCount, commandString)
+		return false, npmerrors.Errorf(npmerrors.RunFileCreator, false, fmt.Sprintf("reached max try count %d", creator.tryCount))
 	}
 	fileString := creator.ToString()
 	return creator.runCommandOnceWithFile(fileString, cmd, args...)
 }
 
+// TODO return another bool that specifies if there was a file-level retriable error?
 func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args ...string) (bool, error) {
 	command := creator.ioShim.Exec.Command(cmd, args...)
 	command.SetStdin(bytes.NewBufferString(fileString))
@@ -175,23 +177,23 @@ func (creator *FileCreator) runCommandOnceWithFile(fileString, cmd string, args 
 	stdErr := string(stdErrBytes)
 	log.Errorf("on try number %d, failed to run command [%s] with error [%v] and stdErr [%s]. Used file:\n%s", creator.tryCount, commandString, err, stdErr, fileString)
 	if creator.hasNoMoreRetries() {
-		return false, fmt.Errorf("after %d tries, failed to run command [%s] with final error [%w] and stdErr [%s]", creator.tryCount, commandString, err, stdErr)
+		return false, fmt.Errorf("after %d tries, failed with final error [%w] and stdErr [%s]", creator.tryCount, err, stdErr)
 	}
 
 	// begin the retry logic
 	if creator.hasFileLevelError(stdErr) {
-		log.Logf("detected a file-level error while running command [%s]", commandString)
-		return false, fmt.Errorf("file-level error: %w", err) // using fmt.Errorf to appease go lint
+		log.Logf("detected a file-level error after running command [%s]", commandString)
+		return false, fmt.Errorf("file-level error: %w", err)
 	}
 
 	// no file-level error, so handle line-level error if there is one
 	lineNum := creator.getErrorLineNumber(commandString, stdErr)
 	if lineNum == -1 {
 		// can't detect a line number error
-		return false, fmt.Errorf("undetected line number error: %w", err) // using fmt.Errorf to appease go lint
+		return false, fmt.Errorf("can't discern error: %w", err)
 	}
 	wasFileAltered := creator.handleLineError(lineNum, commandString, stdErr)
-	return wasFileAltered, fmt.Errorf("tried to handle line number error: %w", err) // using fmt.Errorf to appease go lint
+	return wasFileAltered, fmt.Errorf("tried to handle line number error: %w", err)
 }
 
 func (creator *FileCreator) hasNoMoreRetries() bool {
@@ -263,6 +265,6 @@ func (creator *FileCreator) handleLineError(lineNum int, commandString, stdErr s
 		errorHandler.Callback()
 		return true
 	}
-	log.Logf("no error handler for command [%s] with stdErr [%s]", commandString, stdErr)
+	log.Logf("no error handler for line %d for command [%s] with stdErr [%s]", lineNum, commandString, stdErr)
 	return false
 }

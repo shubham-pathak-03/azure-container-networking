@@ -31,7 +31,7 @@ func (iMgr *IPSetManager) reboot() error {
 }
 
 // don't need networkID
-func (iMgr *IPSetManager) applyIPSets(networkID string) error {
+func (iMgr *IPSetManager) applyIPSets(_ string) error {
 	toDeleteSetNames := convertAndDeleteCache(iMgr.toDeleteCache)
 	toAddOrUpdateSetNames := convertAndDeleteCache(iMgr.toAddOrUpdateCache)
 	creator := iMgr.getFileCreator(maxTryCount, toDeleteSetNames, toAddOrUpdateSetNames)

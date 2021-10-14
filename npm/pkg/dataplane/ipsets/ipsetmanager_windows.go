@@ -16,7 +16,7 @@ const (
 	SetPolicyTypeNestedIPSet hcn.SetPolicyType = "NESTEDIPSET"
 )
 
-func (iMgr *IPSetManager) reboot() error) {
+func (iMgr *IPSetManager) reboot() error {
 	// TODO
 	return nil
 }
