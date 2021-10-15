@@ -112,7 +112,7 @@ func checkEndpointsList(policy *NPMNetworkPolicy, endpointList []string) ([]stri
 }
 
 // getEPPolicyReqFromACLSettings converts given ACLSettings into PolicyEndpointRequest
-func getEPPolicyReqFromACLSettings(settings []hcn.AclPolicySetting) (hcn.PolicyEndpointRequest, error) {
+func getEPPolicyReqFromACLSettings(settings []NPMACLPolSettings) (hcn.PolicyEndpointRequest, error) {
 	policyToAdd := hcn.PolicyEndpointRequest{
 		Policies: make([]hcn.EndpointPolicy, len(settings)),
 	}
@@ -133,8 +133,8 @@ func getEPPolicyReqFromACLSettings(settings []hcn.AclPolicySetting) (hcn.PolicyE
 	return policyToAdd, nil
 }
 
-func getSettingsFromACL(acls []*ACLPolicy) ([]hcn.AclPolicySetting, error) {
-	rulesToRemove := make([]hcn.AclPolicySetting, len(acls))
+func getSettingsFromACL(acls []*ACLPolicy) ([]NPMACLPolSettings, error) {
+	rulesToRemove := make([]NPMACLPolSettings, len(acls))
 	for i, acl := range acls {
 		rule, err := acl.convertToAclSettings()
 		if err != nil {

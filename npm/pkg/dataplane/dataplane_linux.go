@@ -11,9 +11,9 @@ func (dp *DataPlane) initializeDataPlane() error {
 	return nil
 }
 
-func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) (map[string]string, error) {
+func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) error {
 	// NOOP in Linux at the moment
-	return nil, nil
+	return nil
 }
 
 func (dp *DataPlane) shouldUpdatePod() bool {

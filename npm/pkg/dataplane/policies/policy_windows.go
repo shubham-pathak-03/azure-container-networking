@@ -15,7 +15,11 @@ var protocolNumMap = map[Protocol]string{
 	AnyProtocol: "256",
 }
 
+// NPMACLPolSettings is an adaption over the existing hcn.ACLPolicySettings
+// default ACL settings does not contain ID field but HNS is happy with taking an ID
+// this ID will help us woth correctly identifying the ACL policy when reading from HNS
 type NPMACLPolSettings struct {
+	// HNS is not happy with "ID"
 	Id              string            `json:",omitempty"`
 	Protocols       string            `json:",omitempty"` // EX: 6 (TCP), 17 (UDP), 1 (ICMPv4), 58 (ICMPv6), 2 (IGMP)
 	Action          hcn.ActionType    `json:","`
@@ -28,8 +32,8 @@ type NPMACLPolSettings struct {
 	Priority        uint16            `json:",omitempty"`
 }
 
-func (acl ACLPolicy) convertToAclSettings() (hcn.AclPolicySetting, error) {
-	policySettings := hcn.AclPolicySetting{}
+func (acl ACLPolicy) convertToAclSettings() (NPMACLPolSettings, error) {
+	policySettings := NPMACLPolSettings{}
 	for _, setInfo := range acl.SrcList {
 		if !setInfo.Included {
 			return policySettings, fmt.Errorf("Windows Dataplane does not support negative matches. ACL: %+v", acl)
