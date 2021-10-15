@@ -6,6 +6,7 @@ import (
 )
 
 type NPMNetworkPolicy struct {
+	// Netpol Key
 	Name string
 	// PodSelectorIPSets holds all the IPSets generated from Pod Selector
 	PodSelectorIPSets []*ipsets.TranslatedIPSet

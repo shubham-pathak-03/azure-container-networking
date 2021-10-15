@@ -17,14 +17,20 @@ const (
 	AzureNetworkName = "azure"
 )
 
+type policyMode string
+type dataplaneCfg struct {
+	mode policyMode
+}
+
 type DataPlane struct {
 	policyMgr *policies.PolicyManager
 	ipsetMgr  *ipsets.IPSetManager
 	networkID string
 	nodeName  string
-	// key is PodKey
+	// Key is PodIP
 	endpointCache map[string]*NPMEndpoint
 	ioShim        *common.IOShim
+	dataplaneCfg
 }
 
 type NPMEndpoint struct {
@@ -173,12 +179,11 @@ func (dp *DataPlane) AddPolicy(policy *policies.NPMNetworkPolicy) error {
 		return fmt.Errorf("[DataPlane] error while applying dataplane: %w", err)
 	}
 	// TODO calculate endpoints to apply policy on
-	endpointList, err := dp.getEndpointsToApplyPolicy(policy)
+	err = dp.getEndpointsToApplyPolicy(policy)
 	if err != nil {
 		return err
 	}
 
-	policy.PodEndpoints = endpointList
 	err = dp.policyMgr.AddPolicy(policy, nil)
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while adding policy: %w", err)

@@ -15,13 +15,28 @@ var protocolNumMap = map[Protocol]string{
 	AnyProtocol: "256",
 }
 
-func convertToAclSettings(acl ACLPolicy) (hcn.AclPolicySetting, error) {
+type NPMACLPolSettings struct {
+	Id              string            `json:",omitempty"`
+	Protocols       string            `json:",omitempty"` // EX: 6 (TCP), 17 (UDP), 1 (ICMPv4), 58 (ICMPv6), 2 (IGMP)
+	Action          hcn.ActionType    `json:","`
+	Direction       hcn.DirectionType `json:","`
+	LocalAddresses  string            `json:",omitempty"`
+	RemoteAddresses string            `json:",omitempty"`
+	LocalPorts      string            `json:",omitempty"`
+	RemotePorts     string            `json:",omitempty"`
+	RuleType        hcn.RuleType      `json:",omitempty"`
+	Priority        uint16            `json:",omitempty"`
+}
+
+func (acl ACLPolicy) convertToAclSettings() (hcn.AclPolicySetting, error) {
 	policySettings := hcn.AclPolicySetting{}
 	for _, setInfo := range acl.SrcList {
 		if !setInfo.Included {
 			return policySettings, fmt.Errorf("Windows Dataplane does not support negative matches. ACL: %+v", acl)
 		}
 	}
+
+	// TODO complete this convertsion logic
 
 	return policySettings, nil
 }

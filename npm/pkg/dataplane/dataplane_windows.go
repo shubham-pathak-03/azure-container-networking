@@ -8,9 +8,26 @@ import (
 	"k8s.io/klog"
 )
 
+const (
+	policyWithSets policyMode = "policyWithSets"
+	policyWithIPs  policyMode = "policyWithIPs"
+)
+
+func (dp *DataPlane) setPolicyMode() {
+	dp.mode = policyWithSets
+	err := hcn.SetPolicySupported()
+	if err != nil {
+		dp.mode = policyWithIPs
+	}
+}
+
 // initializeDataPlane will help gather network and endpoint details
 func (dp *DataPlane) initializeDataPlane() error {
 	klog.Infof("[DataPlane] Initializing dataplane for windows")
+	// policy mode is only needed for windows, move this to a more central position.
+	if dp.mode == "" {
+		dp.setPolicyMode()
+	}
 
 	err := dp.setNetworkIDByName(AzureNetworkName)
 	if err != nil {
@@ -40,18 +57,23 @@ func (dp *DataPlane) updatePod(pod *UpdateNPMPod) error {
 		return nil
 	}
 
-	podKey := getNPMPodKey(pod.Namespace, pod.Name)
+	err := dp.refreshAllPodEndpoints()
+	if err != nil {
+		klog.Infof("[DataPlane] failed to refresh endpoints in updatePod with %s", err.Error())
+		return err
+	}
+
 	// Check if pod is already present in cache
-	endpoint, ok := dp.endpointCache[podKey]
+	endpoint, ok := dp.endpointCache[pod.PodIP]
 	if (!ok) || (endpoint.IP != pod.PodIP) {
 		// If the existing endpoint ID has changed, it means that the Pod has been recreated
 		// this results in old endpoint to be deleted, so we can safely ignore cleaning up policies
 		// Get endpoint for this pod
-		endpoint, err := dp.getEndpointByIP(pod.PodIP)
-		if err != nil {
-			return err
+		endpoint, ok := dp.endpointCache[pod.PodIP]
+		if !ok {
+			return fmt.Errorf("[DataPlane] did not find endpoint with IPaddress %s", pod.PodIP)
 		}
-		dp.endpointCache[podKey] = endpoint
+		dp.endpointCache[pod.PodIP] = endpoint
 	}
 	// Check if the removed IPSets have any network policy references
 	for _, setName := range pod.IPSetsToRemove {
@@ -126,6 +148,10 @@ func (dp *DataPlane) getSelectorIPsByPolicyName(policyName string) (map[string]s
 		return nil, fmt.Errorf("policy with name %s does not exist", policyName)
 	}
 
+	return dp.getSelectorIPsByPolicy(policy)
+}
+
+func (dp *DataPlane) getSelectorIPsByPolicy(policy *policies.NPMNetworkPolicy) (map[string]struct{}, error) {
 	var selectorIpSets map[string]struct{}
 	for _, ipset := range policy.PodSelectorIPSets {
 		selectorIpSets[ipset.Metadata.GetPrefixName()] = struct{}{}
@@ -134,9 +160,32 @@ func (dp *DataPlane) getSelectorIPsByPolicyName(policyName string) (map[string]s
 	return dp.ipsetMgr.GetIPsFromSelectorIPSets(selectorIpSets)
 }
 
-func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) (map[string]string, error) {
+func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) error {
+	err := dp.refreshAllPodEndpoints()
+	if err != nil {
+		klog.Infof("[DataPlane] failed to refresh endpoints in getEndpointsToApplyPolicy with %s", err.Error())
+		return err
+	}
+
 	// TODO need to calculate all existing selector
-	return nil, nil
+	netpolSelectorIPs, err := dp.getSelectorIPsByPolicy(policy)
+	if err != nil {
+		return err
+	}
+
+	endpointList := make(map[string]string)
+	for ip := range netpolSelectorIPs {
+		endpoint, ok := dp.endpointCache[ip]
+		if !ok {
+			return fmt.Errorf("[DataPlane] did not find endpoint with IPaddress %s", ip)
+		}
+		endpointList[ip] = endpoint.ID
+		// TODO make sure this is netpol key and not name
+		endpoint.NetPolReference[policy.Name] = struct{}{}
+	}
+
+	policy.PodEndpoints = endpointList
+	return nil
 }
 
 func (dp *DataPlane) resetDataPlane() error {
@@ -159,13 +208,23 @@ func (dp *DataPlane) refreshAllPodEndpoints() error {
 	}
 	for _, endpoint := range endpoints {
 		klog.Infof("Endpoints info %+v", endpoint.Policies)
+		if len(endpoint.IpConfigurations) == 0 {
+			klog.Infof("Endpoint ID %s has no IPAddreses", endpoint.Id)
+			continue
+		}
+		ip := endpoint.IpConfigurations[0].IpAddress
+		if ip == "" {
+			klog.Infof("Endpoint ID %s has empty IPAddress field", endpoint.Id)
+			continue
+		}
 		ep := &NPMEndpoint{
 			Name:            endpoint.Name,
 			ID:              endpoint.Id,
 			NetPolReference: make(map[string]struct{}),
+			IP:              endpoint.IpConfigurations[0].IpAddress,
 		}
 
-		dp.endpointCache[ep.Name] = ep
+		dp.endpointCache[ep.IP] = ep
 	}
 	return nil
 }
@@ -201,8 +260,4 @@ func (dp *DataPlane) getEndpointByIP(podIP string) (*NPMEndpoint, error) {
 	}
 
 	return nil, nil
-}
-
-func getNPMPodKey(nameSpace, name string) string {
-	return nameSpace + "/" + name
 }
