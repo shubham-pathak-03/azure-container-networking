@@ -107,8 +107,8 @@ func (iMgr *IPSetManager) calculateNewSetPolicies(existingSets []string) (map[st
 }
 
 func (iMgr *IPSetManager) getHCnNetwork() (*hcn.HostComputeNetwork, error) {
-	if iMgr.iMgrCfg.networkName == "" {
-		iMgr.iMgrCfg.networkName = "azure"
+	if iMgr.iMgrCfg.NetworkName == "" {
+		iMgr.iMgrCfg.NetworkName = "azure"
 	}
 	network, err := iMgr.ioShim.Hns.GetNetworkByName("azure")
 	if err != nil {
