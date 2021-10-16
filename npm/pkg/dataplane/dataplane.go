@@ -18,8 +18,9 @@ const (
 )
 
 type policyMode string
+
 type dataplaneCfg struct {
-	mode policyMode
+	policyMode policyMode
 }
 
 type DataPlane struct {
@@ -61,6 +62,10 @@ func NewDataPlane(nodeName string, ioShim *common.IOShim) *DataPlane {
 		endpointCache: make(map[string]*NPMEndpoint),
 		nodeName:      nodeName,
 		ioShim:        ioShim,
+		dataplaneCfg: dataplaneCfg{
+			// For linux this policyMode is not used
+			policyMode: "",
+		},
 	}
 }
 

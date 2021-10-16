@@ -14,10 +14,10 @@ const (
 )
 
 func (dp *DataPlane) setPolicyMode() {
-	dp.mode = policyWithSets
+	dp.policyMode = policyWithSets
 	err := hcn.SetPolicySupported()
 	if err != nil {
-		dp.mode = policyWithIPs
+		dp.policyMode = policyWithIPs
 	}
 }
 
@@ -25,7 +25,7 @@ func (dp *DataPlane) setPolicyMode() {
 func (dp *DataPlane) initializeDataPlane() error {
 	klog.Infof("[DataPlane] Initializing dataplane for windows")
 	// policy mode is only needed for windows, move this to a more central position.
-	if dp.mode == "" {
+	if dp.policyMode == "" {
 		dp.setPolicyMode()
 	}
 
