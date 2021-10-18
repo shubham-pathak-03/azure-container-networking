@@ -25,7 +25,7 @@ type dataplaneCfg struct {
 }
 
 var iMgrDefaultCfg = &ipsets.IPSetManagerCfg{
-	IPSetMode:   ipsets.ApplyOnNeed,
+	IPSetMode:   ipsets.ApplyAllIPSets,
 	NetworkName: AzureNetworkName,
 }
 
@@ -87,6 +87,10 @@ func (dp *DataPlane) InitializeDataPlane() error {
 // ResetDataPlane helps in cleaning up dataplane sets and policies programmed
 // by NPM, retunring a clean slate
 func (dp *DataPlane) ResetDataPlane() error {
+	err := dp.ipsetMgr.ResetIPSets()
+	if err != nil {
+		return err
+	}
 	return dp.resetDataPlane()
 }
 
@@ -162,7 +166,7 @@ func (dp *DataPlane) UpdatePod(pod *UpdateNPMPod) error {
 // and accordingly makes changes in dataplane. This function helps emulate a single call to
 // dataplane instead of multiple ipset operations calls ipset operations calls to dataplane
 func (dp *DataPlane) ApplyDataPlane() error {
-	err := dp.ipsetMgr.ApplyIPSets(dp.networkID)
+	err := dp.ipsetMgr.ApplyIPSets()
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while applying IPSets: %w", err)
 	}

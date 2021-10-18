@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/npm/metrics"
 	npmerrors "github.com/Azure/azure-container-networking/npm/util/errors"
+	"k8s.io/klog"
 )
 
 type IPSetMode string
@@ -60,6 +61,10 @@ func (iMgr *IPSetManager) ResetIPSets() error {
 func (iMgr *IPSetManager) CreateIPSet(setMetadata *IPSetMetadata) {
 	iMgr.Lock()
 	defer iMgr.Unlock()
+	iMgr.createIPSet(setMetadata)
+}
+
+func (iMgr *IPSetManager) createIPSet(setMetadata *IPSetMetadata) {
 	prefixedName := setMetadata.GetPrefixName()
 	if iMgr.exists(prefixedName) {
 		return
@@ -252,11 +257,18 @@ func (iMgr *IPSetManager) RemoveFromList(listMetadata *IPSetMetadata, setMetadat
 	return nil
 }
 
-func (iMgr *IPSetManager) ApplyIPSets(networkID string) error {
+func (iMgr *IPSetManager) ApplyIPSets() error {
 	iMgr.Lock()
 	defer iMgr.Unlock()
 
-	fmt.Println(networkID) // FIXME remove
+	if len(iMgr.toAddOrUpdateCache) == 0 && len(iMgr.toDeleteCache) == 0 {
+		klog.Info("[IPSetManager] No IPSets to apply")
+		return nil
+	}
+
+	klog.Infof("[IPSetManager] toAddUpdateCahe %+v \n ", iMgr.toAddOrUpdateCache)
+	klog.Infof("[IPSetManager] toDeleteCache %+v \n ", iMgr.toDeleteCache)
+	iMgr.sanitizeDirtyCache()
 
 	// Call the appropriate apply ipsets
 	err := iMgr.applyIPSets()
@@ -368,7 +380,7 @@ func (iMgr *IPSetManager) checkForIPUpdateErrors(setNames []*IPSetMetadata, npmE
 	for _, set := range setNames {
 		prefixedSetName := set.GetPrefixName()
 		if !iMgr.exists(prefixedSetName) {
-			return npmerrors.Errorf(npmErrorString, false, fmt.Sprintf("ipset %s does not exist", prefixedSetName))
+			iMgr.createIPSet(set)
 		}
 
 		set := iMgr.setMap[prefixedSetName]
@@ -398,7 +410,7 @@ func (iMgr *IPSetManager) modifyCacheForKernelMemberUpdate(setName string) {
 func (iMgr *IPSetManager) checkForListMemberUpdateErrors(listMetadata *IPSetMetadata, memberMetadatas []*IPSetMetadata, npmErrorString string) error {
 	prefixedListName := listMetadata.GetPrefixName()
 	if !iMgr.exists(prefixedListName) {
-		return npmerrors.Errorf(npmErrorString, false, fmt.Sprintf("ipset %s does not exist", prefixedListName))
+		iMgr.createIPSet(listMetadata)
 	}
 
 	list := iMgr.setMap[prefixedListName]
@@ -412,7 +424,7 @@ func (iMgr *IPSetManager) checkForListMemberUpdateErrors(listMetadata *IPSetMeta
 			return npmerrors.Errorf(npmErrorString, false, fmt.Sprintf("ipset %s cannot be added to itself", prefixedListName))
 		}
 		if !iMgr.exists(memberName) {
-			return npmerrors.Errorf(npmErrorString, false, fmt.Sprintf("ipset %s does not exist", memberName))
+			iMgr.createIPSet(memberMetadata)
 		}
 		member := iMgr.setMap[memberName]
 
@@ -455,6 +467,17 @@ func (iMgr *IPSetManager) removeMemberIPSet(listName, memberName string) {
 	listIsInKernel := iMgr.shouldBeInKernel(list)
 	if listIsInKernel {
 		iMgr.decKernelReferCountAndModifyCache(member)
+	}
+}
+
+// sanitizeDirtyCache will check if any set marked as delete is in toAddUpdate
+// if so will not delete it
+func (iMgr *IPSetManager) sanitizeDirtyCache() {
+	for setName := range iMgr.toDeleteCache {
+		_, ok := iMgr.toAddOrUpdateCache[setName]
+		if ok {
+			delete(iMgr.toDeleteCache, setName)
+		}
 	}
 }
 
