@@ -15,7 +15,7 @@ var (
 )
 
 type endpointPolicyBuilder struct {
-	aclPolicies   []NPMACLPolSettings
+	aclPolicies   []*NPMACLPolSettings
 	otherPolicies []hcn.EndpointPolicy
 }
 
@@ -176,7 +176,7 @@ func checkEndpointsList(policy *NPMNetworkPolicy, endpointList []string) ([]stri
 }
 
 // getEPPolicyReqFromACLSettings converts given ACLSettings into PolicyEndpointRequest
-func getEPPolicyReqFromACLSettings(settings []NPMACLPolSettings) (hcn.PolicyEndpointRequest, error) {
+func getEPPolicyReqFromACLSettings(settings []*NPMACLPolSettings) (hcn.PolicyEndpointRequest, error) {
 	policyToAdd := hcn.PolicyEndpointRequest{
 		Policies: make([]hcn.EndpointPolicy, len(settings)),
 	}
@@ -197,25 +197,25 @@ func getEPPolicyReqFromACLSettings(settings []NPMACLPolSettings) (hcn.PolicyEndp
 	return policyToAdd, nil
 }
 
-func getSettingsFromACL(acls []*ACLPolicy) ([]NPMACLPolSettings, error) {
-	rulesToRemove := make([]NPMACLPolSettings, len(acls))
+func getSettingsFromACL(acls []*ACLPolicy) ([]*NPMACLPolSettings, error) {
+	hnsRules := make([]*NPMACLPolSettings, len(acls))
 	for i, acl := range acls {
 		rule, err := acl.convertToAclSettings()
 		if err != nil {
 			// TODO need some retry mechanism to check why the translations failed
-			return rulesToRemove, err
+			return hnsRules, err
 		}
-		rulesToRemove[i] = rule
+		hnsRules[i] = rule
 	}
-	return rulesToRemove, nil
+	return hnsRules, nil
 }
 
 // splitEndpointPolicies this function takes in endpoint policies and separated ACL policies from other policies
 func splitEndpointPolicies(endpointPolicies []hcn.EndpointPolicy) (*endpointPolicyBuilder, error) {
-	epBuilder := NewEndpointPolicyBuilder()
+	epBuilder := newEndpointPolicyBuilder()
 	for _, policy := range endpointPolicies {
 		if policy.Type == hcn.ACL {
-			var aclSettings NPMACLPolSettings
+			var aclSettings *NPMACLPolSettings
 			err := json.Unmarshal(policy.Settings, &aclSettings)
 			if err != nil {
 				return nil, ErrFailedUnMarshalACLSettings
@@ -228,9 +228,9 @@ func splitEndpointPolicies(endpointPolicies []hcn.EndpointPolicy) (*endpointPoli
 	return epBuilder, nil
 }
 
-func NewEndpointPolicyBuilder() *endpointPolicyBuilder {
+func newEndpointPolicyBuilder() *endpointPolicyBuilder {
 	return &endpointPolicyBuilder{
-		aclPolicies:   []NPMACLPolSettings{},
+		aclPolicies:   []*NPMACLPolSettings{},
 		otherPolicies: []hcn.EndpointPolicy{},
 	}
 }
@@ -246,7 +246,7 @@ func (epBuilder *endpointPolicyBuilder) updatePolicies() (hcn.PolicyEndpointRequ
 	return epPolReq, nil
 }
 
-func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(rulesToRemove []NPMACLPolSettings) error {
+func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(rulesToRemove []*NPMACLPolSettings) error {
 	lenOfRulesToRemove := len(rulesToRemove)
 	for _, ruleToRemove := range rulesToRemove {
 		for i, acl := range epBuilder.aclPolicies {

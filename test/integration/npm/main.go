@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ipsets"
+	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/policies"
 	"github.com/Azure/azure-container-networking/npm/util"
 )
 
@@ -29,14 +30,57 @@ func createTestSet(name string, setType ipsets.SetType) *testSet {
 }
 
 var (
-	testNSSet        = createTestSet("test-ns-set", ipsets.NameSpace)
-	testKeyPodSet    = createTestSet("test-keyPod-set", ipsets.KeyLabelOfPod)
-	testKVPodSet     = createTestSet("test-kvPod-set", ipsets.KeyValueLabelOfPod)
-	testNamedportSet = createTestSet("test-namedport-set", ipsets.NamedPorts)
-	testCIDRSet      = createTestSet("test-cidr-set", ipsets.CIDRBlocks)
-	// testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
-	// testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
-	// testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
+	testNSSet           = createTestSet("test-ns-set", ipsets.NameSpace)
+	testKeyPodSet       = createTestSet("test-keyPod-set", ipsets.KeyLabelOfPod)
+	testKVPodSet        = createTestSet("test-kvPod-set", ipsets.KeyValueLabelOfPod)
+	testNamedportSet    = createTestSet("test-namedport-set", ipsets.NamedPorts)
+	testCIDRSet         = createTestSet("test-cidr-set", ipsets.CIDRBlocks)
+	testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
+	testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
+	testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
+	testNetPol          = policies.NPMNetworkPolicy{
+		Name: "test/test-netpol",
+		PodSelectorIPSets: []*ipsets.TranslatedIPSet{
+			{
+				Metadata: testNSSet.metadata,
+			},
+			{
+				Metadata: testKeyPodSet.metadata,
+			},
+		},
+		RuleIPSets: []*ipsets.TranslatedIPSet{
+			{
+				Metadata: testNSSet.metadata,
+			},
+			{
+				Metadata: testKeyPodSet.metadata,
+			},
+		},
+		ACLs: []*policies.ACLPolicy{
+			{
+				PolicyID:  "azure-acl-123",
+				Target:    policies.Dropped,
+				Direction: policies.Ingress,
+			},
+			{
+				PolicyID:  "azure-acl-234",
+				Target:    policies.Allowed,
+				Direction: policies.Ingress,
+				SrcList: []policies.SetInfo{
+					{
+						IPSet:     testNSSet.metadata,
+						Included:  true,
+						MatchType: "src",
+					},
+					{
+						IPSet:     testKeyPodSet.metadata,
+						Included:  true,
+						MatchType: "src",
+					},
+				},
+			},
+		},
+	}
 )
 
 func main() {
@@ -68,6 +112,19 @@ func main() {
 	}
 
 	printAndWait()
+
+	if err := dp.AddToList(testKeyNSList.metadata, []*ipsets.IPSetMetadata{testNSSet.metadata}); err != nil {
+		panic(err)
+	}
+
+	if err := dp.AddToList(testKVNSList.metadata, []*ipsets.IPSetMetadata{testNSSet.metadata}); err != nil {
+		panic(err)
+	}
+
+	if err := dp.AddToList(testNestedLabelList.metadata, []*ipsets.IPSetMetadata{testKVPodSet.metadata, testKeyPodSet.metadata}); err != nil {
+		panic(err)
+	}
+
 	// remove members from some sets and delete some sets
 	if err := dp.RemoveFromSet([]*ipsets.IPSetMetadata{testNSSet.metadata}, "10.0.0.1", "b"); err != nil {
 		panic(err)
