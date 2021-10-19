@@ -53,9 +53,13 @@ type ACLPolicy struct {
 type SetInfo struct {
 	IPSet     *ipsets.IPSetMetadata
 	Included  bool
-	MatchType string // match type can be “src”, “src,dst” or “dst,dst” etc
+	MatchType MatchType
 }
 
+// Ports represents a range of ports.
+// To specify one port, set Port and EndPort to the same value.
+// uint16 is used since there are 2^16 - 1 TCP/UDP ports (0 is invalid)
+// and 2^16 SCTP ports. ICMP is connectionless and doesn't use ports.
 type Ports struct {
 	Port    int32
 	EndPort int32
@@ -66,6 +70,8 @@ type Verdict string
 type Direction string
 
 type Protocol string
+
+type MatchType int8
 
 const (
 	// Ingress when packet is entering a container
@@ -89,5 +95,46 @@ const (
 	// ICMP Protocol
 	ICMP Protocol = "icmp"
 	// AnyProtocol can be used for all other protocols
-	AnyProtocol Protocol = "any"
+	AnyProtocol Protocol = "all"
 )
+
+// Possible MatchTypes.
+// MatchTypes with 2 locations (e.g. SrcDst) are for ip and port respectively.
+const (
+	SrcMatch    MatchType = 0
+	DstMatch    MatchType = 1
+	SrcSrcMatch MatchType = 2
+	DstDstMatch MatchType = 3
+	SrcDstMatch MatchType = 4
+	DstSrcMatch MatchType = 5
+)
+
+func (policy *ACLPolicy) hasKnownDirection() bool {
+	return policy.Direction == Ingress ||
+		policy.Direction == Egress ||
+		policy.Direction == Both
+}
+
+func (policy *ACLPolicy) hasIngress() bool {
+	return policy.Direction == Ingress || policy.Direction == Both
+}
+
+func (policy *ACLPolicy) hasEgress() bool {
+	return policy.Direction == Egress || policy.Direction == Both
+}
+
+func (policy *ACLPolicy) hasKnownProtocol() bool {
+	return policy.Protocol != "" && (policy.Protocol == TCP ||
+		policy.Protocol == UDP ||
+		policy.Protocol == SCTP ||
+		policy.Protocol == ICMP ||
+		policy.Protocol == AnyProtocol)
+}
+
+func (policy *ACLPolicy) hasKnownTarget() bool {
+	return policy.Target == Allowed || policy.Target == Dropped
+}
+
+func (portRange *Ports) isValidRange() bool {
+	return portRange.Port <= portRange.EndPort
+}

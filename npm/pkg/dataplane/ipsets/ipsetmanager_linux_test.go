@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/npm/pkg/dataplane/ioutil"
+	dptestutils "github.com/Azure/azure-container-networking/npm/pkg/dataplane/testutils"
 	"github.com/Azure/azure-container-networking/npm/util"
 	testutils "github.com/Azure/azure-container-networking/test/utils"
 	"github.com/stretchr/testify/require"
@@ -109,7 +110,7 @@ func TestApplyCreationsAndAdds(t *testing.T) {
 	creator := iMgr.getFileCreator(1, nil, toAddOrUpdateSetNames)
 	actualFileString := getSortedFileString(creator)
 
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -154,7 +155,7 @@ func TestApplyDeletions(t *testing.T) {
 	lines = append(lines, getSortedLines(TestKeyNSList, TestNSSet.HashedName)...)
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err := creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -196,7 +197,7 @@ func TestFailureOnCreation(t *testing.T) {
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
 	actualFileString := getSortedFileString(creator)
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -260,7 +261,7 @@ func TestFailureOnAddToList(t *testing.T) {
 	expectedFileString = strings.ReplaceAll(expectedFileString, badLine+"\n", "")
 
 	actualFileString := getSortedFileString(creator)
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -302,7 +303,7 @@ func TestFailureOnFlush(t *testing.T) {
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
 	actualFileString := getSortedFileString(creator)
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -344,7 +345,7 @@ func TestFailureOnDeletion(t *testing.T) {
 	expectedFileString := strings.Join(lines, "\n") + "\n"
 
 	actualFileString := getSortedFileString(creator)
-	assertEqualFileStrings(t, expectedFileString, actualFileString)
+	dptestutils.AssertEqualFileStrings(t, expectedFileString, actualFileString)
 	wasFileAltered, err = creator.RunCommandOnceWithFile(util.Ipset, util.IpsetRestoreFlag)
 	require.NoError(t, err)
 	require.False(t, wasFileAltered)
@@ -401,19 +402,4 @@ func getSortedFileString(creator *ioutil.FileCreator) string {
 
 func isAddLine(line string) bool {
 	return len(line) >= 2 && line[:2] == "-A"
-}
-
-func assertEqualFileStrings(t *testing.T, expectedFileString, actualFileString string) {
-	if expectedFileString == actualFileString {
-		return
-	}
-	fmt.Println("EXPECTED FILE STRING:")
-	for _, line := range strings.Split(expectedFileString, "\n") {
-		fmt.Println(line)
-	}
-	fmt.Println("ACTUAL FILE STRING")
-	for _, line := range strings.Split(actualFileString, "\n") {
-		fmt.Println(line)
-	}
-	require.FailNow(t, "got unexpected file string (see print contents above)")
 }

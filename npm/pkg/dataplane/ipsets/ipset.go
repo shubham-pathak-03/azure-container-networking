@@ -379,3 +379,18 @@ func (set *IPSet) canSetBeSelectorIPSet() bool {
 		set.Type == Namespace ||
 		set.Type == NestedLabelOfPod)
 }
+
+func (ipset *TranslatedIPSet) Equals(otherIPSet *TranslatedIPSet) bool {
+	if ipset.Metadata.Name != otherIPSet.Metadata.Name ||
+		ipset.Metadata.Type != otherIPSet.Metadata.Type ||
+		len(ipset.Members) != len(otherIPSet.Members) {
+		return false
+	}
+	for k, member := range ipset.Members {
+		otherMember := otherIPSet.Members[k]
+		if member != otherMember {
+			return false
+		}
+	}
+	return true
+}
