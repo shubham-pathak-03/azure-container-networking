@@ -77,7 +77,7 @@ func TestRemoveFromSetMissing(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, NameSpace)
 	err := iMgr.RemoveFromSet([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
 func TestAddToListMissing(t *testing.T) {
@@ -85,7 +85,7 @@ func TestAddToListMissing(t *testing.T) {
 	setMetadata := NewIPSetMetadata(testSetName, NameSpace)
 	listMetadata := NewIPSetMetadata("testlabel", KeyLabelOfNameSpace)
 	err := iMgr.AddToList(listMetadata, []*IPSetMetadata{setMetadata})
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
 func TestAddToList(t *testing.T) {
@@ -139,7 +139,7 @@ func TestRemoveFromListMissing(t *testing.T) {
 	iMgr.CreateIPSet(listMetadata)
 
 	err := iMgr.RemoveFromList(listMetadata, []*IPSetMetadata{setMetadata})
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteIPSet(t *testing.T) {
