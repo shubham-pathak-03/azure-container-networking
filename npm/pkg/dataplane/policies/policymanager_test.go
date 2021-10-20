@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	testNSSet     = ipsets.NewIPSetMetadata("test-ns-set", ipsets.NameSpace)
+	testNSSet     = ipsets.NewIPSetMetadata("test-ns-set", ipsets.Namespace)
 	testKeyPodSet = ipsets.NewIPSetMetadata("test-keyPod-set", ipsets.KeyLabelOfPod)
 	testNetPol    = NPMNetworkPolicy{
 		Name: "test/test-netpol",

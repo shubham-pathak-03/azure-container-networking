@@ -30,13 +30,13 @@ func createTestSet(name string, setType ipsets.SetType) *testSet {
 }
 
 var (
-	testNSSet           = createTestSet("test-ns-set", ipsets.NameSpace)
+	testNSSet           = createTestSet("test-ns-set", ipsets.Namespace)
 	testKeyPodSet       = createTestSet("test-keyPod-set", ipsets.KeyLabelOfPod)
 	testKVPodSet        = createTestSet("test-kvPod-set", ipsets.KeyValueLabelOfPod)
 	testNamedportSet    = createTestSet("test-namedport-set", ipsets.NamedPorts)
 	testCIDRSet         = createTestSet("test-cidr-set", ipsets.CIDRBlocks)
-	testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
-	testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
+	testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNamespace)
+	testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNamespace)
 	testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
 	testNetPol          = policies.NPMNetworkPolicy{
 		Name: "test/test-netpol",
@@ -81,6 +81,9 @@ var (
 			},
 		},
 	}
+	// testKeyNSList       = createTestSet("test-keyNS-list", ipsets.KeyLabelOfNameSpace)
+	// testKVNSList        = createTestSet("test-kvNS-list", ipsets.KeyValueLabelOfNameSpace)
+	// testNestedLabelList = createTestSet("test-nestedlabel-list", ipsets.NestedLabelOfPod)
 )
 
 func main() {
