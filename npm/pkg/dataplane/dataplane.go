@@ -195,12 +195,12 @@ func (dp *DataPlane) AddPolicy(policy *policies.NPMNetworkPolicy) error {
 		return fmt.Errorf("[DataPlane] error while applying dataplane: %w", err)
 	}
 	// TODO calculate endpoints to apply policy on
-	err = dp.getEndpointsToApplyPolicy(policy)
+	endpointList, err := dp.getEndpointsToApplyPolicy(policy)
 	if err != nil {
 		return err
 	}
 
-	err = dp.policyMgr.AddPolicy(policy, nil)
+	err = dp.policyMgr.AddPolicy(policy, endpointList)
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while adding policy: %w", err)
 	}

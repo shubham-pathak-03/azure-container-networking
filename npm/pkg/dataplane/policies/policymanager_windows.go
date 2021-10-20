@@ -19,9 +19,8 @@ type endpointPolicyBuilder struct {
 	otherPolicies []hcn.EndpointPolicy
 }
 
-func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList []string) error {
-	endpointList, ok := checkEndpointsList(policy, endpointList)
-	if !ok {
+func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList map[string]string) error {
+	if endpointList == nil {
 		klog.Infof("[DataPlane Windows] No Endpoints to apply policy %s on", policy.Name)
 		return nil
 	}
@@ -44,7 +43,7 @@ func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList []st
 	}
 
 	var aggregateErr error
-	for _, epID := range endpointList {
+	for epIP, epID := range endpointList {
 		err = pMgr.addEPPolicyWithEpID(epID, epPolicyRequest)
 		if err != nil {
 			klog.Infof("[DataPlane Windows] Failed to add policy on %s ID Endpoint with %s err", epID, err.Error())
@@ -52,12 +51,14 @@ func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList []st
 			// aggregate the error message and return it at the end
 			aggregateErr = fmt.Errorf("Failed to add policy on %s ID Endpoint with %s err \n Previous %w", epID, err.Error(), aggregateErr)
 		}
+		// Now update policy cache to reflect new endpoint
+		policy.PodEndpoints[epIP] = epID
 	}
 
 	return aggregateErr
 }
 
-func (pMgr *PolicyManager) removePolicy(name string, endpointList []string) error {
+func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]string) error {
 	policy, ok := pMgr.GetPolicy(name)
 	if !ok {
 		return nil
@@ -68,10 +69,12 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList []string) erro
 		return nil
 	}
 
-	endpointList, ok = checkEndpointsList(policy, endpointList)
-	if !ok {
-		klog.Infof("[DataPlane Windows] No Endpoints to remove policy %s on", policy.Name)
-		return nil
+	if endpointList == nil {
+		if policy.PodEndpoints == nil {
+			klog.Infof("[DataPlane Windows] No Endpoints to remove policy %s on", policy.Name)
+			return nil
+		}
+		endpointList = policy.PodEndpoints
 	}
 
 	rulesToRemove, err := getSettingsFromACL(policy.ACLs)
@@ -83,7 +86,7 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList []string) erro
 	// but if the bug is not solved then get all existing policies and remove relevant policies from list
 	// then apply remaining policies onto the endpoint
 	var aggregateErr error
-	for _, epID := range endpointList {
+	for epIP, epID := range endpointList {
 		epObj, err := pMgr.getEndpointByID(epID)
 		if err != nil {
 			// Do not return if one endpoint fails, try all endpoints.
@@ -118,6 +121,9 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList []string) erro
 			aggregateErr = fmt.Errorf("[DataPlanewindows] Skipping removing policies on %s ID Endpoint with %s err\n Previous %w", epID, err.Error(), aggregateErr)
 			continue
 		}
+
+		// Delete podendpoint from policy cache
+		delete(policy.PodEndpoints, epIP)
 	}
 
 	return aggregateErr
@@ -156,23 +162,6 @@ func (pMgr *PolicyManager) getEndpointByID(id string) (*hcn.HostComputeEndpoint,
 		return nil, err
 	}
 	return epObj, nil
-}
-
-func checkEndpointsList(policy *NPMNetworkPolicy, endpointList []string) ([]string, bool) {
-	if len(endpointList) > 0 {
-		return endpointList, true
-	}
-	if len(policy.PodEndpoints) == 0 {
-		return nil, false
-	}
-	endpointList = make([]string, len(policy.PodEndpoints))
-	i := 0
-	for _, epID := range policy.PodEndpoints {
-		endpointList[i] = epID
-		i++
-	}
-
-	return endpointList, true
 }
 
 // getEPPolicyReqFromACLSettings converts given ACLSettings into PolicyEndpointRequest

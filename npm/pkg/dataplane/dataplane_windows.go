@@ -88,7 +88,10 @@ func (dp *DataPlane) updatePod(pod *UpdateNPMPod) error {
 			// Remove policy should be deleting this netpol reference
 			if _, ok := endpoint.NetPolReference[policyName]; ok {
 				// Delete the network policy
-				err := dp.policyMgr.RemovePolicy(policyName, []string{endpoint.ID})
+				endpointList := map[string]string{
+					endpoint.IP: endpoint.ID,
+				}
+				err := dp.policyMgr.RemovePolicy(policyName, endpointList)
 				if err != nil {
 					return err
 				}
@@ -131,7 +134,11 @@ func (dp *DataPlane) updatePod(pod *UpdateNPMPod) error {
 		if !ok {
 			return fmt.Errorf("policy with name %s does not exist", policyName)
 		}
-		err = dp.policyMgr.AddPolicy(policy, []string{endpoint.ID})
+
+		endpointList := map[string]string{
+			endpoint.IP: endpoint.ID,
+		}
+		err = dp.policyMgr.AddPolicy(policy, endpointList)
 		if err != nil {
 			return err
 		}
@@ -160,32 +167,32 @@ func (dp *DataPlane) getSelectorIPsByPolicy(policy *policies.NPMNetworkPolicy) (
 	return dp.ipsetMgr.GetIPsFromSelectorIPSets(selectorIpSets)
 }
 
-func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) error {
+func (dp *DataPlane) getEndpointsToApplyPolicy(policy *policies.NPMNetworkPolicy) (map[string]string, error) {
 	err := dp.refreshAllPodEndpoints()
 	if err != nil {
 		klog.Infof("[DataPlane] failed to refresh endpoints in getEndpointsToApplyPolicy with %s", err.Error())
-		return err
+		return nil, err
 	}
 
 	// TODO need to calculate all existing selector
 	netpolSelectorIPs, err := dp.getSelectorIPsByPolicy(policy)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	endpointList := make(map[string]string)
 	for ip := range netpolSelectorIPs {
 		endpoint, ok := dp.endpointCache[ip]
 		if !ok {
-			return fmt.Errorf("[DataPlane] did not find endpoint with IPaddress %s", ip)
+			// this endpoint might not be in this particular Node.
+			klog.Infof("[DataPlane] Ignoring endpoint with IP %s. Not found in endpointCache", ip)
+			continue
 		}
 		endpointList[ip] = endpoint.ID
 		// TODO make sure this is netpol key and not name
 		endpoint.NetPolReference[policy.Name] = struct{}{}
 	}
-
-	policy.PodEndpoints = endpointList
-	return nil
+	return endpointList, nil
 }
 
 func (dp *DataPlane) resetDataPlane() error {

@@ -32,7 +32,7 @@ func (pMgr *PolicyManager) GetPolicy(name string) (*NPMNetworkPolicy, bool) {
 	return policy, ok
 }
 
-func (pMgr *PolicyManager) AddPolicy(policy *NPMNetworkPolicy, endpointList []string) error {
+func (pMgr *PolicyManager) AddPolicy(policy *NPMNetworkPolicy, endpointList map[string]string) error {
 	// Call actual dataplane function to apply changes
 	err := pMgr.addPolicy(policy, endpointList)
 	if err != nil {
@@ -43,7 +43,7 @@ func (pMgr *PolicyManager) AddPolicy(policy *NPMNetworkPolicy, endpointList []st
 	return nil
 }
 
-func (pMgr *PolicyManager) RemovePolicy(name string, endpointList []string) error {
+func (pMgr *PolicyManager) RemovePolicy(name string, endpointList map[string]string) error {
 	// Call actual dataplane function to apply changes
 	err := pMgr.removePolicy(name, endpointList)
 	if err != nil {
