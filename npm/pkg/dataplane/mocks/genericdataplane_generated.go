@@ -54,7 +54,7 @@ func (mr *MockGenericDataplaneMockRecorder) AddPolicy(policies interface{}) *gom
 }
 
 // AddToLists mocks base method.
-func (m *MockGenericDataplane) AddToLists(listName, setNames []*ipsets.IPSetMetadata, podMetadata *dataplane.PodMetadata) error {
+func (m *MockGenericDataplane) AddToList(listName, setNames []*ipsets.IPSetMetadata, podMetadata *dataplane.PodMetadata) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddToLists", listName, setNames, podMetadata)
 	ret0, _ := ret[0].(error)
@@ -64,7 +64,7 @@ func (m *MockGenericDataplane) AddToLists(listName, setNames []*ipsets.IPSetMeta
 // AddToLists indicates an expected call of AddToLists.
 func (mr *MockGenericDataplaneMockRecorder) AddToLists(listName, setNames, podMetadata interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToLists", reflect.TypeOf((*MockGenericDataplane)(nil).AddToLists), listName, setNames, podMetadata)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToLists", reflect.TypeOf((*MockGenericDataplane)(nil).AddToList), listName, setNames, podMetadata)
 }
 
 // AddToSet mocks base method.

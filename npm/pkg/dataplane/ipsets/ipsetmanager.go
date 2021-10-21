@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/Azure/azure-container-networking/common"
-	"github.com/Azure/azure-container-networking/log"
 	"github.com/Azure/azure-container-networking/npm/metrics"
 	npmerrors "github.com/Azure/azure-container-networking/npm/util/errors"
 	"k8s.io/klog"
@@ -58,10 +57,13 @@ func (iMgr *IPSetManager) ResetIPSets() error {
 	return nil
 }
 
-func (iMgr *IPSetManager) CreateIPSet(setMetadata *IPSetMetadata) {
+func (iMgr *IPSetManager) CreateIPSet(setMetadata []*IPSetMetadata) {
 	iMgr.Lock()
 	defer iMgr.Unlock()
-	iMgr.createIPSet(setMetadata)
+
+	for _, set := range setMetadata {
+		iMgr.createIPSet(set)
+	}
 }
 
 func (iMgr *IPSetManager) createIPSet(setMetadata *IPSetMetadata) {
@@ -179,7 +181,7 @@ func (iMgr *IPSetManager) AddToSet(addToSets []*IPSetMetadata, ip, podKey string
 		cachedPodKey, ok := set.IPPodKey[ip]
 		set.IPPodKey[ip] = podKey
 		if ok && cachedPodKey != podKey {
-			log.Logf("AddToSet: PodOwner has changed for Ip: %s, setName:%s, Old podKey: %s, new podKey: %s. Replace context with new PodOwner.",
+			klog.Infof("AddToSet: PodOwner has changed for Ip: %s, setName:%s, Old podKey: %s, new podKey: %s. Replace context with new PodOwner.",
 				ip, set.Name, cachedPodKey, podKey)
 			continue
 		}
@@ -208,7 +210,7 @@ func (iMgr *IPSetManager) RemoveFromSet(removeFromSets []*IPSetMetadata, ip, pod
 			continue
 		}
 		if cachedPodKey != podKey {
-			log.Logf("DeleteFromSet: PodOwner has changed for Ip: %s, setName:%s, Old podKey: %s, new podKey: %s. Ignore the delete as this is stale update",
+			klog.Infof("DeleteFromSet: PodOwner has changed for Ip: %s, setName:%s, Old podKey: %s, new podKey: %s. Ignore the delete as this is stale update",
 				ip, prefixedName, cachedPodKey, podKey)
 			continue
 		}
@@ -221,21 +223,23 @@ func (iMgr *IPSetManager) RemoveFromSet(removeFromSets []*IPSetMetadata, ip, pod
 	return nil
 }
 
-func (iMgr *IPSetManager) AddToList(listMetadata *IPSetMetadata, setMetadatas []*IPSetMetadata) error {
+func (iMgr *IPSetManager) AddToList(listMetadatas, setMetadatas []*IPSetMetadata) error {
 	iMgr.Lock()
 	defer iMgr.Unlock()
 
-	if err := iMgr.checkForListMemberUpdateErrors(listMetadata, setMetadatas, npmerrors.AppendIPSet); err != nil {
-		return err
-	}
+	for _, listMetadata := range listMetadatas {
+		if err := iMgr.checkForListMemberUpdateErrors(listMetadata, setMetadatas, npmerrors.AppendIPSet); err != nil {
+			return err
+		}
 
-	listName := listMetadata.GetPrefixName()
-	for _, setMetadata := range setMetadatas {
-		setName := setMetadata.GetPrefixName()
-		iMgr.addMemberIPSet(listName, setName)
+		listName := listMetadata.GetPrefixName()
+		for _, setMetadata := range setMetadatas {
+			setName := setMetadata.GetPrefixName()
+			iMgr.addMemberIPSet(listName, setName)
+		}
+		iMgr.modifyCacheForKernelMemberUpdate(listName)
+		metrics.AddEntryToIPSet(listName)
 	}
-	iMgr.modifyCacheForKernelMemberUpdate(listName)
-	metrics.AddEntryToIPSet(listName)
 	return nil
 }
 
@@ -476,7 +480,11 @@ func (iMgr *IPSetManager) sanitizeDirtyCache() {
 	for setName := range iMgr.toDeleteCache {
 		_, ok := iMgr.toAddOrUpdateCache[setName]
 		if ok {
-			delete(iMgr.toDeleteCache, setName)
+			// delete(iMgr.toDeleteCache, setName)
+			// We have decided not proactively clean up the cache
+			// instead will be logging a log message as below
+
+			klog.Infof("[IPSetManager] Unexpected state in dirty cache %s set is part of both update and delete caches \n ", setName)
 		}
 	}
 }

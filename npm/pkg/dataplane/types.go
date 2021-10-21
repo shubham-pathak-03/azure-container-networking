@@ -12,7 +12,7 @@ type GenericDataplane interface {
 	DeleteIPSet(setMetadata *ipsets.IPSetMetadata)
 	AddToSet(setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error
 	RemoveFromSet(setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error
-	AddToLists(listName []*ipsets.IPSetMetadata, setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error
+	AddToList(listName []*ipsets.IPSetMetadata, setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error
 	RemoveFromList(listName *ipsets.IPSetMetadata, setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error
 	ApplyDataPlane() error
 	AddPolicy(policies *policies.NPMNetworkPolicy) error

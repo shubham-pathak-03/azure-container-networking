@@ -41,37 +41,19 @@ type NPMACLPolSettings struct {
 }
 
 func (orig NPMACLPolSettings) compare(new *NPMACLPolSettings) bool {
-	if orig.Id != new.Id {
-		return false
+	if orig.Id == new.Id &&
+		orig.Protocols == new.Protocols &&
+		orig.Action == new.Action &&
+		orig.Direction == new.Direction &&
+		orig.LocalAddresses == new.LocalAddresses &&
+		orig.RemoteAddresses == new.RemoteAddresses &&
+		orig.LocalPorts == new.LocalPorts &&
+		orig.RemotePorts == new.RemotePorts &&
+		orig.RuleType == new.RuleType &&
+		orig.Priority == new.Priority {
+		return true
 	}
-	if orig.Protocols != new.Protocols {
-		return false
-	}
-	if orig.Action != new.Action {
-		return false
-	}
-	if orig.Direction != new.Direction {
-		return false
-	}
-	if orig.LocalAddresses != new.LocalAddresses {
-		return false
-	}
-	if orig.RemoteAddresses != new.RemoteAddresses {
-		return false
-	}
-	if orig.LocalPorts != new.LocalPorts {
-		return false
-	}
-	if orig.RemotePorts != new.RemotePorts {
-		return false
-	}
-	if orig.RuleType != new.RuleType {
-		return false
-	}
-	if orig.Priority != new.Priority {
-		return false
-	}
-	return true
+	return false
 }
 
 func (acl *ACLPolicy) convertToAclSettings() (*NPMACLPolSettings, error) {
@@ -120,31 +102,15 @@ func (acl *ACLPolicy) convertToAclSettings() (*NPMACLPolSettings, error) {
 	// For Traffic Direction EGRESS
 	// 		LocalAddresses = Destination IPs
 	// 		RemoteAddresses = Source IPs
-	if srcListStr != "" {
-		policySettings.LocalAddresses = srcListStr
-	}
-	if srcPortStr != "" {
-		policySettings.LocalPorts = srcPortStr
-	}
-	if dstListStr != "" {
-		policySettings.RemoteAddresses = dstListStr
-	}
-	if dstPortStr != "" {
-		policySettings.RemotePorts = dstPortStr
-	}
+	policySettings.LocalAddresses = srcListStr
+	policySettings.LocalPorts = srcPortStr
+	policySettings.RemoteAddresses = dstListStr
+	policySettings.RemotePorts = dstPortStr
 	if policySettings.Direction == hcn.DirectionTypeOut {
-		if dstListStr != "" {
-			policySettings.LocalAddresses = dstListStr
-		}
-		if dstPortStr != "" {
-			policySettings.LocalPorts = dstPortStr
-		}
-		if srcListStr != "" {
-			policySettings.RemoteAddresses = srcListStr
-		}
-		if srcPortStr != "" {
-			policySettings.RemotePorts = srcPortStr
-		}
+		policySettings.LocalAddresses = dstListStr
+		policySettings.LocalPorts = dstPortStr
+		policySettings.RemoteAddresses = srcListStr
+		policySettings.RemotePorts = srcPortStr
 	}
 
 	return policySettings, nil

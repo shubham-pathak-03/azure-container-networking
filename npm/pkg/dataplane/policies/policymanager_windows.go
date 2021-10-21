@@ -30,6 +30,22 @@ func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList map[
 		return nil
 	}
 
+	for epIP, epID := range policy.PodEndpoints {
+		expectedEpID, ok := endpointList[epIP]
+		if !ok {
+			continue
+		}
+
+		if expectedEpID != epID {
+			klog.Infof("[DataPlane Windows] PolicyName : %s Endpoint IP: %s's ID %s does not match expected %s", policy.Name, epIP, epID, expectedEpID)
+			delete(policy.PodEndpoints, epIP)
+			continue
+		}
+
+		klog.Infof("[DataPlane Windows]  PolicyName : %s Endpoint IP: %s's ID %s is already in cache", policy.Name, epIP, epID)
+		delete(endpointList, epIP)
+	}
+
 	rulesToAdd, err := getSettingsFromACL(policy.ACLs)
 	if err != nil {
 		return err
@@ -44,12 +60,13 @@ func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, endpointList map[
 
 	var aggregateErr error
 	for epIP, epID := range endpointList {
-		err = pMgr.addEPPolicyWithEpID(epID, epPolicyRequest)
+		err = pMgr.applyPoliciesToEndpointID(epID, epPolicyRequest)
 		if err != nil {
 			klog.Infof("[DataPlane Windows] Failed to add policy on %s ID Endpoint with %s err", epID, err.Error())
 			// Do not return if one endpoint fails, try all endpoints.
 			// aggregate the error message and return it at the end
 			aggregateErr = fmt.Errorf("Failed to add policy on %s ID Endpoint with %s err \n Previous %w", epID, err.Error(), aggregateErr)
+			continue
 		}
 		// Now update policy cache to reflect new endpoint
 		policy.PodEndpoints[epIP] = epID
@@ -92,6 +109,7 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]str
 			// Do not return if one endpoint fails, try all endpoints.
 			// aggregate the error message and return it at the end
 			aggregateErr = fmt.Errorf("[DataPlane Windows] Skipping removing policies on %s ID Endpoint with %s err\n Previous %w", epID, err.Error(), aggregateErr)
+			continue
 		}
 		if len(epObj.Policies) == 0 {
 			klog.Infof("[DataPlanewindows] No Policies to remove on %s ID Endpoint", epID)
@@ -110,13 +128,13 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]str
 			continue
 		}
 
-		epPolicies, err := epBuilder.updatePolicies()
+		epPolicies, err := epBuilder.getHCNPolicyRequest()
 		if err != nil {
 			aggregateErr = fmt.Errorf("[DataPlanewindows] Skipping removing policies on %s ID Endpoint with %s err\n Previous %w", epID, err.Error(), aggregateErr)
 			continue
 		}
 
-		err = pMgr.updateEPPolicyWithEpObj(epObj, epPolicies)
+		err = pMgr.updatePoliciesOnEndpoint(epObj, epPolicies)
 		if err != nil {
 			aggregateErr = fmt.Errorf("[DataPlanewindows] Skipping removing policies on %s ID Endpoint with %s err\n Previous %w", epID, err.Error(), aggregateErr)
 			continue
@@ -130,7 +148,7 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]str
 }
 
 // addEPPolicyWithEpID given an EP ID and a list of policies, add the policies to the endpoint
-func (pMgr *PolicyManager) addEPPolicyWithEpID(epID string, policies hcn.PolicyEndpointRequest) error {
+func (pMgr *PolicyManager) applyPoliciesToEndpointID(epID string, policies hcn.PolicyEndpointRequest) error {
 	epObj, err := pMgr.getEndpointByID(epID)
 	if err != nil {
 		klog.Infof("[DataPlane Windows] Skipping applying policies %s ID Endpoint with %s err", epID, err.Error())
@@ -146,7 +164,7 @@ func (pMgr *PolicyManager) addEPPolicyWithEpID(epID string, policies hcn.PolicyE
 }
 
 // addEPPolicyWithEpID given an EP ID and a list of policies, add the policies to the endpoint
-func (pMgr *PolicyManager) updateEPPolicyWithEpObj(epObj *hcn.HostComputeEndpoint, policies hcn.PolicyEndpointRequest) error {
+func (pMgr *PolicyManager) updatePoliciesOnEndpoint(epObj *hcn.HostComputeEndpoint, policies hcn.PolicyEndpointRequest) error {
 	err := pMgr.ioShim.Hns.ApplyEndpointPolicy(epObj, hcn.RequestTypeUpdate, policies)
 	if err != nil {
 		klog.Infof("[DataPlane Windows]Failed to apply policies on %s ID Endpoint with %s err", epObj.Id, err.Error())
@@ -224,7 +242,7 @@ func newEndpointPolicyBuilder() *endpointPolicyBuilder {
 	}
 }
 
-func (epBuilder *endpointPolicyBuilder) updatePolicies() (hcn.PolicyEndpointRequest, error) {
+func (epBuilder *endpointPolicyBuilder) getHCNPolicyRequest() (hcn.PolicyEndpointRequest, error) {
 	epPolReq, err := getEPPolicyReqFromACLSettings(epBuilder.aclPolicies)
 	if err != nil {
 		return hcn.PolicyEndpointRequest{}, err
@@ -240,12 +258,12 @@ func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(rulesToRemove [
 	for _, ruleToRemove := range rulesToRemove {
 		for i, acl := range epBuilder.aclPolicies {
 			// First check if ID is present and equal, this saves compute cycles to compare both objects
-			if ruleToRemove.Id != "" && ruleToRemove.Id == acl.Id {
+			if (ruleToRemove.Id != "" && ruleToRemove.Id == acl.Id) ||
+				ruleToRemove.compare(acl) {
+				// Remove the ACL policy from the list
 				epBuilder.removeACLPolicyAtIndex(i)
 				lenOfRulesToRemove--
-			} else if ruleToRemove.compare(acl) {
-				epBuilder.removeACLPolicyAtIndex(i)
-				lenOfRulesToRemove--
+				break
 			}
 		}
 	}
@@ -257,5 +275,9 @@ func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(rulesToRemove [
 
 func (epBuilder *endpointPolicyBuilder) removeACLPolicyAtIndex(i int) {
 	klog.Infof("[DataPlane Windows] Found ACL with ID %s and removing it", epBuilder.aclPolicies[i].Id)
+	if i == len(epBuilder.aclPolicies)-1 {
+		epBuilder.aclPolicies = epBuilder.aclPolicies[:i]
+		return
+	}
 	epBuilder.aclPolicies = append(epBuilder.aclPolicies[:i], epBuilder.aclPolicies[i+1:]...)
 }

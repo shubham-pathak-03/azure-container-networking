@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	nodeName                = "testnode"
 	fakeIPSetRestoreSuccess = testutils.TestCmd{
 		Cmd:      []string{util.Ipset, util.IpsetRestoreFlag},
 		ExitCode: 0,
@@ -74,7 +75,7 @@ func TestNewDataPlane(t *testing.T) {
 	}
 
 	setMetadata := ipsets.NewIPSetMetadata("test", ipsets.Namespace)
-	dp.CreateIPSet(setMetadata)
+	dp.CreateIPSet([]*ipsets.IPSetMetadata{setMetadata})
 }
 
 func TestInitializeDataPlane(t *testing.T) {
@@ -112,14 +113,10 @@ func TestCreateAndDeleteIpSets(t *testing.T) {
 		},
 	}
 
-	for _, v := range setsTocreate {
-		dp.CreateIPSet(v)
-	}
+	dp.CreateIPSet(setsTocreate)
 
 	// Creating again to see if duplicates get created
-	for _, v := range setsTocreate {
-		dp.CreateIPSet(v)
-	}
+	dp.CreateIPSet(setsTocreate)
 
 	for _, v := range setsTocreate {
 		prefixedName := v.GetPrefixName()
@@ -153,9 +150,7 @@ func TestAddToSet(t *testing.T) {
 		},
 	}
 
-	for _, v := range setsTocreate {
-		dp.CreateIPSet(v)
-	}
+	dp.CreateIPSet(setsTocreate)
 
 	for _, v := range setsTocreate {
 		prefixedName := v.GetPrefixName()
@@ -163,11 +158,13 @@ func TestAddToSet(t *testing.T) {
 		assert.NotNil(t, set)
 	}
 
-	err := dp.AddToSet(setsTocreate, "10.0.0.1", "testns/a")
+	podMetadata := NewPodMetadata("testns/a", "10.0.0.1", nodeName)
+	err := dp.AddToSet(setsTocreate, podMetadata)
 	require.NoError(t, err)
 
+	v6PodMetadata := NewPodMetadata("testns/a", "2001:db8:0:0:0:0:2:1", nodeName)
 	// Test IPV6 addess it should error out
-	err = dp.AddToSet(setsTocreate, "2001:db8:0:0:0:0:2:1", "testns/a")
+	err = dp.AddToSet(setsTocreate, v6PodMetadata)
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {
@@ -180,10 +177,10 @@ func TestAddToSet(t *testing.T) {
 		assert.NotNil(t, set)
 	}
 
-	err = dp.RemoveFromSet(setsTocreate, "10.0.0.1", "testns/a")
+	err = dp.RemoveFromSet(setsTocreate, podMetadata)
 	require.NoError(t, err)
 
-	err = dp.RemoveFromSet(setsTocreate, "2001:db8:0:0:0:0:2:1", "testns/a")
+	err = dp.RemoveFromSet(setsTocreate, v6PodMetadata)
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {
