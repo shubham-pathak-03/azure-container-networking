@@ -30,6 +30,7 @@ func (iMgr *IPSetManager) resetIPSets() error {
 		return err
 	}
 
+	// TODO delete 2nd level sets first and then 1st level sets
 	_, toDeleteSets := iMgr.segregateSetPolicies(network.Policies, true)
 
 	klog.Infof("[IPSetManager Windows] Deleteing %d Set Policies", len(toDeleteSets))

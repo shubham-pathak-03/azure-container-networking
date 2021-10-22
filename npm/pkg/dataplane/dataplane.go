@@ -35,8 +35,9 @@ type DataPlane struct {
 	networkID string
 	nodeName  string
 	// Key is PodIP
-	endpointCache map[string]*NPMEndpoint
-	ioShim        *common.IOShim
+	endpointCache  map[string]*NPMEndpoint
+	ioShim         *common.IOShim
+	updatePodCache map[string]*updateNPMPod
 	dataplaneCfg
 }
 
@@ -49,31 +50,34 @@ type NPMEndpoint struct {
 	NetPolReference map[string]struct{}
 }
 
-// UpdateNPMPod pod controller will populate and send this datastructure to dataplane
-// to update the dataplane with the latest pod information
-// this helps in calculating if any update needs to have policies applied or removed
-type UpdateNPMPod struct {
-	Name           string
-	Namespace      string
-	PodIP          string
-	NodeName       string
-	IPSetsToAdd    []string
-	IPSetsToRemove []string
-}
-
-func NewDataPlane(nodeName string, ioShim *common.IOShim) *DataPlane {
+func NewDataPlane(nodeName string, ioShim *common.IOShim) (*DataPlane, error) {
 	metrics.InitializeAll()
-	return &DataPlane{
-		policyMgr:     policies.NewPolicyManager(ioShim),
-		ipsetMgr:      ipsets.NewIPSetManager(iMgrDefaultCfg, ioShim),
-		endpointCache: make(map[string]*NPMEndpoint),
-		nodeName:      nodeName,
-		ioShim:        ioShim,
+	dp := &DataPlane{
+		policyMgr:      policies.NewPolicyManager(ioShim),
+		ipsetMgr:       ipsets.NewIPSetManager(iMgrDefaultCfg, ioShim),
+		endpointCache:  make(map[string]*NPMEndpoint),
+		nodeName:       nodeName,
+		ioShim:         ioShim,
+		updatePodCache: make(map[string]*updateNPMPod),
 		dataplaneCfg: dataplaneCfg{
 			// For linux this policyMode is not used
 			policyMode: "",
 		},
 	}
+
+	err := dp.ResetDataPlane()
+	if err != nil {
+		klog.Errorf("Failed to reset dataplane: %v", err)
+		return nil, err
+	}
+
+	err = dp.InitializeDataPlane()
+	if err != nil {
+		klog.Errorf("Failed to initialize dataplane: %v", err)
+		return nil, err
+	}
+
+	return dp, nil
 }
 
 // InitializeDataPlane helps in setting up dataplane for NPM
@@ -112,6 +116,15 @@ func (dp *DataPlane) AddToSet(setNames []*ipsets.IPSetMetadata, podMetadata *Pod
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while adding to set: %w", err)
 	}
+
+	klog.Infof("[Dataplane] Updating Sets to Add for pod key %s", podMetadata.PodKey)
+	if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
+		klog.Infof("[Dataplane] {AddToSet} pod key %s not found creating a new obj", podMetadata.PodKey)
+		dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
+	}
+
+	dp.updatePodCache[podMetadata.PodKey].updateIPSetsToAdd(setNames)
+
 	return nil
 }
 
@@ -122,12 +135,21 @@ func (dp *DataPlane) RemoveFromSet(setNames []*ipsets.IPSetMetadata, podMetadata
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while removing from set: %w", err)
 	}
+
+	klog.Infof("[Dataplane] Updating Sets to Remove for pod key %s", podMetadata.PodKey)
+	if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
+		klog.Infof("[Dataplane] {RemoveFromSet} pod key %s not found creating a new obj", podMetadata.PodKey)
+		dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
+	}
+
+	dp.updatePodCache[podMetadata.PodKey].updateIPSetsToRemove(setNames)
+
 	return nil
 }
 
 // AddToList takes a list name and list of sets which are to be added as members
 // to given list
-func (dp *DataPlane) AddToList(listName, setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error {
+func (dp *DataPlane) AddToList(listName, setNames []*ipsets.IPSetMetadata) error {
 	err := dp.ipsetMgr.AddToList(listName, setNames)
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while adding to list: %w", err)
@@ -137,7 +159,7 @@ func (dp *DataPlane) AddToList(listName, setNames []*ipsets.IPSetMetadata, podMe
 
 // RemoveFromList takes a list name and list of sets which are to be removed as members
 // to given list
-func (dp *DataPlane) RemoveFromList(listName *ipsets.IPSetMetadata, setNames []*ipsets.IPSetMetadata, podMetadata *PodMetadata) error {
+func (dp *DataPlane) RemoveFromList(listName *ipsets.IPSetMetadata, setNames []*ipsets.IPSetMetadata) error {
 	err := dp.ipsetMgr.RemoveFromList(listName, setNames)
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while removing from list: %w", err)
@@ -150,15 +172,6 @@ func (dp *DataPlane) ShouldUpdatePod() bool {
 	return dp.shouldUpdatePod()
 }
 
-// UpdatePod is to be called by pod_controller ONLY when a new pod is CREATED.
-func (dp *DataPlane) UpdatePod(pod *UpdateNPMPod) error {
-	err := dp.updatePod(pod)
-	if err != nil {
-		return fmt.Errorf("[DataPlane] error while updating pod: %w", err)
-	}
-	return nil
-}
-
 // ApplyDataPlane all the IPSet operations just update cache and update a dirty ipset structure,
 // they do not change apply changes into dataplane. This function needs to be called at the
 // end of IPSet operations of a given controller event, it will check for the dirty ipset list
@@ -168,6 +181,14 @@ func (dp *DataPlane) ApplyDataPlane() error {
 	err := dp.ipsetMgr.ApplyIPSets()
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while applying IPSets: %w", err)
+	}
+
+	for podKey, pod := range dp.updatePodCache {
+		err := dp.updatePod(pod)
+		if err != nil {
+			return fmt.Errorf("[DataPlane] error while updating pod: %w", err)
+		}
+		delete(dp.updatePodCache, podKey)
 	}
 	return nil
 }

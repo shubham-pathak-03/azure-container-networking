@@ -49,8 +49,8 @@ func (dp *DataPlane) shouldUpdatePod() bool {
 // updatePod has two responsibilities in windows
 // 1. Will call into dataplane and updates endpoint references of this pod.
 // 2. Will check for existing applicable network policies and applies it on endpoint
-func (dp *DataPlane) updatePod(pod *UpdateNPMPod) error {
-	klog.Infof("[DataPlane] updatePod called for %s/%s", pod.Namespace, pod.Name)
+func (dp *DataPlane) updatePod(pod *updateNPMPod) error {
+	klog.Infof("[DataPlane] updatePod called for Pod Key %s", pod.PodKey)
 	// Check if pod is part of this node
 	if pod.NodeName != dp.nodeName {
 		klog.Infof("[DataPlane] ignoring update pod as expected Node: [%s] got: [%s]", dp.nodeName, pod.NodeName)
@@ -200,6 +200,7 @@ func (dp *DataPlane) resetDataPlane() error {
 }
 
 func (dp *DataPlane) getAllPodEndpoints() ([]hcn.HostComputeEndpoint, error) {
+	klog.Infof("Getting all endpoints for Network ID %s", dp.networkID)
 	endpoints, err := dp.ioShim.Hns.ListEndpointsOfNetwork(dp.networkID)
 	if err != nil {
 		return nil, err

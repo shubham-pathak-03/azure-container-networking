@@ -432,7 +432,7 @@ func (c *PodController) syncAddAndUpdatePod(newPodObj *corev1.Pod) error {
 		toBeAdded := []*ipsets.IPSetMetadata{ipsets.NewIPSetMetadata(newPodObj.Namespace, ipsets.Namespace)}
 		c.dp.CreateIPSet([]*ipsets.IPSetMetadata{ipsets.NewIPSetMetadata(newPodObj.Namespace, ipsets.Namespace)})
 
-		if err = c.dp.AddToLists([]*ipsets.IPSetMetadata{kubeAllNamespaces}, toBeAdded, newPodMetadata); err != nil {
+		if err = c.dp.AddToList([]*ipsets.IPSetMetadata{kubeAllNamespaces}, toBeAdded); err != nil {
 			c.npmNamespaceCache.Unlock()
 			return fmt.Errorf("[syncAddAndUpdatePod] Error: failed to add %s to all-namespace ipset list with err: %w", newPodObj.Namespace, err)
 		}

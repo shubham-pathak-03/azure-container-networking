@@ -68,7 +68,8 @@ var (
 
 func TestNewDataPlane(t *testing.T) {
 	metrics.InitializeAll()
-	dp := NewDataPlane("testnode", emptyMockIOShim)
+	dp, err := NewDataPlane("testnode", emptyMockIOShim)
+	require.NoError(t, err)
 
 	if dp == nil {
 		t.Error("NewDataPlane() returned nil")
@@ -80,19 +81,21 @@ func TestNewDataPlane(t *testing.T) {
 
 func TestInitializeDataPlane(t *testing.T) {
 	metrics.InitializeAll()
-	dp := NewDataPlane("testnode", emptyMockIOShim)
+	dp, err := NewDataPlane("testnode", emptyMockIOShim)
+	require.NoError(t, err)
 
 	assert.NotNil(t, dp)
-	err := dp.InitializeDataPlane()
+	err = dp.InitializeDataPlane()
 	require.NoError(t, err)
 }
 
 func TestResetDataPlane(t *testing.T) {
 	metrics.InitializeAll()
-	dp := NewDataPlane("testnode", emptyMockIOShim)
+	dp, err := NewDataPlane("testnode", emptyMockIOShim)
+	require.NoError(t, err)
 
 	assert.NotNil(t, dp)
-	err := dp.InitializeDataPlane()
+	err = dp.InitializeDataPlane()
 	require.NoError(t, err)
 	err = dp.ResetDataPlane()
 	require.NoError(t, err)
@@ -100,7 +103,8 @@ func TestResetDataPlane(t *testing.T) {
 
 func TestCreateAndDeleteIpSets(t *testing.T) {
 	metrics.InitializeAll()
-	dp := NewDataPlane("testnode", emptyMockIOShim)
+	dp, err := NewDataPlane("testnode", emptyMockIOShim)
+	require.NoError(t, err)
 	assert.NotNil(t, dp)
 	setsTocreate := []*ipsets.IPSetMetadata{
 		{
@@ -137,7 +141,8 @@ func TestCreateAndDeleteIpSets(t *testing.T) {
 
 func TestAddToSet(t *testing.T) {
 	metrics.InitializeAll()
-	dp := NewDataPlane("testnode", emptyMockIOShim)
+	dp, err := NewDataPlane("testnode", emptyMockIOShim)
+	require.NoError(t, err)
 
 	setsTocreate := []*ipsets.IPSetMetadata{
 		{
@@ -159,7 +164,7 @@ func TestAddToSet(t *testing.T) {
 	}
 
 	podMetadata := NewPodMetadata("testns/a", "10.0.0.1", nodeName)
-	err := dp.AddToSet(setsTocreate, podMetadata)
+	err = dp.AddToSet(setsTocreate, podMetadata)
 	require.NoError(t, err)
 
 	v6PodMetadata := NewPodMetadata("testns/a", "2001:db8:0:0:0:0:2:1", nodeName)
@@ -198,9 +203,10 @@ func TestApplyPolicy(t *testing.T) {
 	metrics.InitializeAll()
 	calls := []testutils.TestCmd{fakeIPSetRestoreSuccess}
 	ioShim := common.NewMockIOShim(calls)
-	dp := NewDataPlane("testnode", ioShim)
+	dp, err := NewDataPlane("testnode", ioShim)
+	require.NoError(t, err)
 
-	err := dp.AddPolicy(testPolicyobj)
+	err = dp.AddPolicy(testPolicyobj)
 	require.NoError(t, err)
 }
 
@@ -208,9 +214,10 @@ func TestRemovePolicy(t *testing.T) {
 	metrics.InitializeAll()
 	calls := []testutils.TestCmd{fakeIPSetRestoreSuccess, fakeIPSetRestoreSuccess}
 	ioShim := common.NewMockIOShim(calls)
-	dp := NewDataPlane("testnode", ioShim)
+	dp, err := NewDataPlane("testnode", ioShim)
+	require.NoError(t, err)
 
-	err := dp.AddPolicy(testPolicyobj)
+	err = dp.AddPolicy(testPolicyobj)
 	require.NoError(t, err)
 
 	err = dp.RemovePolicy(testPolicyobj.Name)
@@ -221,9 +228,10 @@ func TestUpdatePolicy(t *testing.T) {
 	metrics.InitializeAll()
 	calls := []testutils.TestCmd{fakeIPSetRestoreSuccess, fakeIPSetRestoreSuccess}
 	ioShim := common.NewMockIOShim(calls)
-	dp := NewDataPlane("testnode", ioShim)
+	dp, err := NewDataPlane("testnode", ioShim)
+	require.NoError(t, err)
 
-	err := dp.AddPolicy(testPolicyobj)
+	err = dp.AddPolicy(testPolicyobj)
 	require.NoError(t, err)
 
 	testPolicyobj.ACLs = []*policies.ACLPolicy{

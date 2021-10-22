@@ -25,6 +25,8 @@ type NPMNetworkPolicy struct {
 // or a single HNS rule in windows
 type ACLPolicy struct {
 	// PolicyID is the rules name with a given network policy
+	// PolicyID will be same for all ACLs in a Network Policy
+	// it will be "azure-acl-NetPolNS-netPolName"
 	PolicyID string
 	// Comment is the string attached to rule to identity its representation
 	Comment string
