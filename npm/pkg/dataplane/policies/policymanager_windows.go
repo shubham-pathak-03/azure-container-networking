@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Microsoft/hcsshim/hcn"
 	"k8s.io/klog"
@@ -122,7 +123,7 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]str
 			continue
 		}
 
-		epBuilder.compareAndRemovePolicies(rulesToRemove)
+		epBuilder.compareAndRemovePolicies(rulesToRemove[0].Id, len(rulesToRemove))
 		epPolicies, err := epBuilder.getHCNPolicyRequest()
 		if err != nil {
 			aggregateErr = fmt.Errorf("[DataPlanewindows] Skipping removing policies on %s ID Endpoint with %s err\n Previous %w", epID, err.Error(), aggregateErr)
@@ -140,6 +141,11 @@ func (pMgr *PolicyManager) removePolicy(name string, endpointList map[string]str
 	}
 
 	return aggregateErr
+}
+
+func (pMgr *PolicyManager) reset() error {
+	// TODO
+	return nil
 }
 
 // addEPPolicyWithEpID given an EP ID and a list of policies, add the policies to the endpoint
@@ -248,36 +254,38 @@ func (epBuilder *endpointPolicyBuilder) getHCNPolicyRequest() (hcn.PolicyEndpoin
 	return epPolReq, nil
 }
 
-func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(rulesToRemove []*NPMACLPolSettings) {
-	lenOfRulesToRemove := len(rulesToRemove)
+func (epBuilder *endpointPolicyBuilder) compareAndRemovePolicies(ruleIDToRemove string, lenOfRulesToRemove int) bool {
 	// All ACl policies in a given Netpol will have the same ID
 	// starting with "azure-acl-" prefix
-	if len(rulesToRemove) == 0 {
-		klog.Infof("[DataPlane Windows] no rules to remove. So ignoring the call")
-		return
-	}
-
-	toRemoveID := rulesToRemove[0].Id
 	aclFound := false
 	for i, acl := range epBuilder.aclPolicies {
 		// First check if ID is present and equal, this saves compute cycles to compare both objects
-		if toRemoveID == acl.Id {
+		if ruleIDToRemove == acl.Id {
 			// Remove the ACL policy from the list
 			epBuilder.removeACLPolicyAtIndex(i)
 			lenOfRulesToRemove--
 			aclFound = true
-			break
 		}
 	}
 	// If ACl Policies are not found, it means that we might have removed them earlier
 	// or never applied them
 	if !aclFound {
-		klog.Infof("[DataPlane Windows] ACL with ID %s is not Found in Dataplane", toRemoveID)
+		klog.Infof("[DataPlane Windows] ACL with ID %s is not Found in Dataplane", ruleIDToRemove)
 	}
 	// if there are still rules to remove, it means that we might have not added all the policies in the add
 	// case and were only able to find a portion of the rules to remove
 	if lenOfRulesToRemove > 0 {
 		klog.Infof("[Dataplane Windows] did not find %d no of ACLs to remove", lenOfRulesToRemove)
+	}
+	return aclFound
+}
+
+func (epBuilder *endpointPolicyBuilder) resetAllNPMAclPolicies() {
+	for i, acl := range epBuilder.aclPolicies {
+		if strings.HasPrefix(acl.Id, "azure-acl-") {
+			// Remove the ACL policy from the list
+			epBuilder.removeACLPolicyAtIndex(i)
+		}
 	}
 }
 

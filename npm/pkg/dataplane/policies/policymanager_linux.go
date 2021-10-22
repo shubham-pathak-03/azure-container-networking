@@ -7,3 +7,7 @@ func (pMgr *PolicyManager) addPolicy(policy *NPMNetworkPolicy, _ map[string]stri
 func (pMgr *PolicyManager) removePolicy(name string, _ map[string]string) error {
 	return nil
 }
+
+func (pMgr *PolicyManager) reset() error {
+	return nil
+}

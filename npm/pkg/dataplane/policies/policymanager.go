@@ -22,6 +22,10 @@ func NewPolicyManager(ioShim *common.IOShim) *PolicyManager {
 	}
 }
 
+func (pMgr *PolicyManager) Reset() error {
+	return pMgr.reset()
+}
+
 func (pMgr *PolicyManager) PolicyExists(name string) bool {
 	_, ok := pMgr.policyMap.cache[name]
 	return ok
