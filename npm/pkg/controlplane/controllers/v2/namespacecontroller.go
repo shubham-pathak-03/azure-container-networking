@@ -326,9 +326,9 @@ func (nsc *NamespaceController) syncAddNamespace(nsObj *corev1.Namespace) error 
 		npmNs.appendLabels(map[string]string{nsLabelKey: nsLabelVal}, appendToExistingLabels)
 	}
 
-	nsc.dp.CreateIPSet(append(namespaceSets, setsToAddNamespaceTo...))
+	nsc.dp.CreateIPSets(append(namespaceSets, setsToAddNamespaceTo...))
 
-	if err := nsc.dp.AddToList(setsToAddNamespaceTo, namespaceSets); err != nil {
+	if err := nsc.dp.AddToLists(setsToAddNamespaceTo, namespaceSets); err != nil {
 		return fmt.Errorf("failed to sync add namespace with error %w", err)
 	}
 
@@ -385,7 +385,7 @@ func (nsc *NamespaceController) syncUpdateNamespace(newNsObj *corev1.Namespace) 
 		labelKeySet := []*ipsets.IPSetMetadata{ipsets.NewIPSetMetadata(nsLabelVal, ipsets.KeyLabelOfNamespace)}
 		toBeAdded := []*ipsets.IPSetMetadata{ipsets.NewIPSetMetadata(newNsName, ipsets.Namespace)}
 
-		if err = nsc.dp.AddToList(labelKeySet, toBeAdded); err != nil {
+		if err = nsc.dp.AddToLists(labelKeySet, toBeAdded); err != nil {
 			metrics.SendErrorLogAndMetric(util.NSID, "[UpdateNamespace] Error: failed to add namespace %s to ipset list %s with err: %v", newNsName, nsLabelVal, err)
 			return fmt.Errorf("failed to add %v sets to %v lists during addtolists in sync update namespace with err %w", toBeAdded, labelKeySet, err)
 		}

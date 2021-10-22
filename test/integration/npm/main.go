@@ -101,7 +101,7 @@ func main() {
 	}
 
 	// add all types of ipsets, some with members added
-	if err := dp.AddToSet([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadata); err != nil {
+	if err := dp.AddToSets([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadata); err != nil {
 		panic(err)
 	}
 	podMetadataB := &dataplane.PodMetadata{
@@ -109,7 +109,7 @@ func main() {
 		PodIP:    "10.0.0.1",
 		NodeName: "",
 	}
-	if err := dp.AddToSet([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadataB); err != nil {
+	if err := dp.AddToSets([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadataB); err != nil {
 		panic(err)
 	}
 	podMetadataC := &dataplane.PodMetadata{
@@ -117,10 +117,10 @@ func main() {
 		PodIP:    "10.240.0.24",
 		NodeName: nodeName,
 	}
-	if err := dp.AddToSet([]*ipsets.IPSetMetadata{testKeyPodSet.metadata}, podMetadataC); err != nil {
+	if err := dp.AddToSets([]*ipsets.IPSetMetadata{testKeyPodSet.metadata}, podMetadataC); err != nil {
 		panic(err)
 	}
-	dp.CreateIPSet([]*ipsets.IPSetMetadata{testKVPodSet.metadata, testNamedportSet.metadata, testCIDRSet.metadata})
+	dp.CreateIPSets([]*ipsets.IPSetMetadata{testKVPodSet.metadata, testNamedportSet.metadata, testCIDRSet.metadata})
 
 	// can't do lists on my computer
 
@@ -130,16 +130,16 @@ func main() {
 
 	printAndWait()
 
-	if err := dp.AddToList([]*ipsets.IPSetMetadata{testKeyNSList.metadata, testKVNSList.metadata}, []*ipsets.IPSetMetadata{testNSSet.metadata}); err != nil {
+	if err := dp.AddToLists([]*ipsets.IPSetMetadata{testKeyNSList.metadata, testKVNSList.metadata}, []*ipsets.IPSetMetadata{testNSSet.metadata}); err != nil {
 		panic(err)
 	}
 
-	if err := dp.AddToList([]*ipsets.IPSetMetadata{testNestedLabelList.metadata}, []*ipsets.IPSetMetadata{testKVPodSet.metadata, testKeyPodSet.metadata}); err != nil {
+	if err := dp.AddToLists([]*ipsets.IPSetMetadata{testNestedLabelList.metadata}, []*ipsets.IPSetMetadata{testKVPodSet.metadata, testKeyPodSet.metadata}); err != nil {
 		panic(err)
 	}
 
 	// remove members from some sets and delete some sets
-	if err := dp.RemoveFromSet([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadataB); err != nil {
+	if err := dp.RemoveFromSets([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadataB); err != nil {
 		panic(err)
 	}
 	dp.DeleteIPSet(testKVPodSet.metadata)
@@ -148,7 +148,7 @@ func main() {
 	}
 
 	printAndWait()
-	if err := dp.RemoveFromSet([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadata); err != nil {
+	if err := dp.RemoveFromSets([]*ipsets.IPSetMetadata{testNSSet.metadata}, podMetadata); err != nil {
 		panic(err)
 	}
 	dp.DeleteIPSet(testNSSet.metadata)

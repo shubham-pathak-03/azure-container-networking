@@ -28,9 +28,9 @@ func TestCreateIPSet(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata})
 	// creating twice
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata})
 
 	assert.True(t, iMgr.exists(setMetadata.GetPrefixName()))
 
@@ -44,21 +44,21 @@ func TestAddToSet(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata})
 
-	err := iMgr.AddToSet([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
+	err := iMgr.AddToSets([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
 	require.NoError(t, err)
 
-	err = iMgr.AddToSet([]*IPSetMetadata{setMetadata}, "2001:db8:0:0:0:0:2:1", "newpod")
+	err = iMgr.AddToSets([]*IPSetMetadata{setMetadata}, "2001:db8:0:0:0:0:2:1", "newpod")
 	require.NoError(t, err)
 
 	// same IP changed podkey
-	err = iMgr.AddToSet([]*IPSetMetadata{setMetadata}, testPodIP, "newpod")
+	err = iMgr.AddToSets([]*IPSetMetadata{setMetadata}, testPodIP, "newpod")
 	require.NoError(t, err)
 
 	listMetadata := NewIPSetMetadata("testipsetlist", KeyLabelOfNamespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{listMetadata})
-	err = iMgr.AddToSet([]*IPSetMetadata{listMetadata}, testPodIP, testPodKey)
+	iMgr.CreateIPSets([]*IPSetMetadata{listMetadata})
+	err = iMgr.AddToSets([]*IPSetMetadata{listMetadata}, testPodIP, testPodKey)
 	require.Error(t, err)
 }
 
@@ -66,17 +66,17 @@ func TestRemoveFromSet(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata})
-	err := iMgr.AddToSet([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata})
+	err := iMgr.AddToSets([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
 	require.NoError(t, err)
-	err = iMgr.RemoveFromSet([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
+	err = iMgr.RemoveFromSets([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
 	require.NoError(t, err)
 }
 
 func TestRemoveFromSetMissing(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
-	err := iMgr.RemoveFromSet([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
+	err := iMgr.RemoveFromSets([]*IPSetMetadata{setMetadata}, testPodIP, testPodKey)
 	require.NoError(t, err)
 }
 
@@ -84,7 +84,7 @@ func TestAddToListMissing(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
 	listMetadata := NewIPSetMetadata("testlabel", KeyLabelOfNamespace)
-	err := iMgr.AddToList([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
+	err := iMgr.AddToLists([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
 	require.NoError(t, err)
 }
 
@@ -92,9 +92,9 @@ func TestAddToList(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
 	listMetadata := NewIPSetMetadata(testListName, KeyLabelOfNamespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata, listMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata, listMetadata})
 
-	err := iMgr.AddToList([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
+	err := iMgr.AddToLists([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
 	require.NoError(t, err)
 
 	set := iMgr.GetIPSet(listMetadata.GetPrefixName())
@@ -109,9 +109,9 @@ func TestRemoveFromList(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
 	listMetadata := NewIPSetMetadata(testListName, KeyLabelOfNamespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata, listMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata, listMetadata})
 
-	err := iMgr.AddToList([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
+	err := iMgr.AddToLists([]*IPSetMetadata{listMetadata}, []*IPSetMetadata{setMetadata})
 	require.NoError(t, err)
 
 	set := iMgr.GetIPSet(listMetadata.GetPrefixName())
@@ -134,7 +134,7 @@ func TestRemoveFromListMissing(t *testing.T) {
 
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
 	listMetadata := NewIPSetMetadata(testListName, KeyLabelOfNamespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{listMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{listMetadata})
 
 	err := iMgr.RemoveFromList(listMetadata, []*IPSetMetadata{setMetadata})
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestRemoveFromListMissing(t *testing.T) {
 func TestDeleteIPSet(t *testing.T) {
 	iMgr := NewIPSetManager(iMgrApplyOnNeedCfg, common.NewMockIOShim([]testutils.TestCmd{}))
 	setMetadata := NewIPSetMetadata(testSetName, Namespace)
-	iMgr.CreateIPSet([]*IPSetMetadata{setMetadata})
+	iMgr.CreateIPSets([]*IPSetMetadata{setMetadata})
 
 	iMgr.DeleteIPSet(setMetadata.GetPrefixName())
 	// TODO add cache check
@@ -170,15 +170,15 @@ func TestGetIPsFromSelectorIPSets(t *testing.T) {
 		},
 	}
 
-	iMgr.CreateIPSet(setsTocreate)
+	iMgr.CreateIPSets(setsTocreate)
 
-	err := iMgr.AddToSet(setsTocreate, "10.0.0.1", "test")
+	err := iMgr.AddToSets(setsTocreate, "10.0.0.1", "test")
 	require.NoError(t, err)
 
-	err = iMgr.AddToSet(setsTocreate, "10.0.0.2", "test1")
+	err = iMgr.AddToSets(setsTocreate, "10.0.0.2", "test1")
 	require.NoError(t, err)
 
-	err = iMgr.AddToSet([]*IPSetMetadata{setsTocreate[0], setsTocreate[2], setsTocreate[3]}, "10.0.0.3", "test3")
+	err = iMgr.AddToSets([]*IPSetMetadata{setsTocreate[0], setsTocreate[2], setsTocreate[3]}, "10.0.0.3", "test3")
 	require.NoError(t, err)
 
 	ipsetList := map[string]struct{}{}
@@ -229,10 +229,10 @@ func TestAddDeleteSelectorReferences(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	iMgr.CreateIPSet(setsTocreate)
+	iMgr.CreateIPSets(setsTocreate)
 
 	// Add setpod4 to setpod3
-	err := iMgr.AddToList([]*IPSetMetadata{setsTocreate[3]}, []*IPSetMetadata{setsTocreate[4]})
+	err := iMgr.AddToLists([]*IPSetMetadata{setsTocreate[3]}, []*IPSetMetadata{setsTocreate[4]})
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {
@@ -300,8 +300,8 @@ func TestAddDeleteNetPolReferences(t *testing.T) {
 	}
 	networkPolicName := "testNetworkPolicy"
 
-	iMgr.CreateIPSet(setsTocreate)
-	err := iMgr.AddToList([]*IPSetMetadata{setsTocreate[3]}, []*IPSetMetadata{setsTocreate[4]})
+	iMgr.CreateIPSets(setsTocreate)
+	err := iMgr.AddToLists([]*IPSetMetadata{setsTocreate[3]}, []*IPSetMetadata{setsTocreate[4]})
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {

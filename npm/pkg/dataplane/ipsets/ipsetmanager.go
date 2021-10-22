@@ -57,11 +57,11 @@ func (iMgr *IPSetManager) ResetIPSets() error {
 	return nil
 }
 
-func (iMgr *IPSetManager) CreateIPSet(setMetadata []*IPSetMetadata) {
+func (iMgr *IPSetManager) CreateIPSets(setMetadatas []*IPSetMetadata) {
 	iMgr.Lock()
 	defer iMgr.Unlock()
 
-	for _, set := range setMetadata {
+	for _, set := range setMetadatas {
 		iMgr.createIPSet(set)
 	}
 }
@@ -166,7 +166,7 @@ func (iMgr *IPSetManager) DeleteReference(setName, referenceName string, referen
 	return nil
 }
 
-func (iMgr *IPSetManager) AddToSet(addToSets []*IPSetMetadata, ip, podKey string) error {
+func (iMgr *IPSetManager) AddToSets(addToSets []*IPSetMetadata, ip, podKey string) error {
 	// check if the IP is IPV4 family in controller
 	iMgr.Lock()
 	defer iMgr.Unlock()
@@ -192,7 +192,7 @@ func (iMgr *IPSetManager) AddToSet(addToSets []*IPSetMetadata, ip, podKey string
 	return nil
 }
 
-func (iMgr *IPSetManager) RemoveFromSet(removeFromSets []*IPSetMetadata, ip, podKey string) error {
+func (iMgr *IPSetManager) RemoveFromSets(removeFromSets []*IPSetMetadata, ip, podKey string) error {
 	iMgr.Lock()
 	defer iMgr.Unlock()
 
@@ -223,7 +223,7 @@ func (iMgr *IPSetManager) RemoveFromSet(removeFromSets []*IPSetMetadata, ip, pod
 	return nil
 }
 
-func (iMgr *IPSetManager) AddToList(listMetadatas, setMetadatas []*IPSetMetadata) error {
+func (iMgr *IPSetManager) AddToLists(listMetadatas, setMetadatas []*IPSetMetadata) error {
 	iMgr.Lock()
 	defer iMgr.Unlock()
 

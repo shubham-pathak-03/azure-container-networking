@@ -76,7 +76,7 @@ func TestNewDataPlane(t *testing.T) {
 	}
 
 	setMetadata := ipsets.NewIPSetMetadata("test", ipsets.Namespace)
-	dp.CreateIPSet([]*ipsets.IPSetMetadata{setMetadata})
+	dp.CreateIPSets([]*ipsets.IPSetMetadata{setMetadata})
 }
 
 func TestInitializeDataPlane(t *testing.T) {
@@ -117,10 +117,10 @@ func TestCreateAndDeleteIpSets(t *testing.T) {
 		},
 	}
 
-	dp.CreateIPSet(setsTocreate)
+	dp.CreateIPSets(setsTocreate)
 
 	// Creating again to see if duplicates get created
-	dp.CreateIPSet(setsTocreate)
+	dp.CreateIPSets(setsTocreate)
 
 	for _, v := range setsTocreate {
 		prefixedName := v.GetPrefixName()
@@ -155,7 +155,7 @@ func TestAddToSet(t *testing.T) {
 		},
 	}
 
-	dp.CreateIPSet(setsTocreate)
+	dp.CreateIPSets(setsTocreate)
 
 	for _, v := range setsTocreate {
 		prefixedName := v.GetPrefixName()
@@ -164,12 +164,12 @@ func TestAddToSet(t *testing.T) {
 	}
 
 	podMetadata := NewPodMetadata("testns/a", "10.0.0.1", nodeName)
-	err = dp.AddToSet(setsTocreate, podMetadata)
+	err = dp.AddToSets(setsTocreate, podMetadata)
 	require.NoError(t, err)
 
 	v6PodMetadata := NewPodMetadata("testns/a", "2001:db8:0:0:0:0:2:1", nodeName)
 	// Test IPV6 addess it should error out
-	err = dp.AddToSet(setsTocreate, v6PodMetadata)
+	err = dp.AddToSets(setsTocreate, v6PodMetadata)
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {
@@ -182,10 +182,10 @@ func TestAddToSet(t *testing.T) {
 		assert.NotNil(t, set)
 	}
 
-	err = dp.RemoveFromSet(setsTocreate, podMetadata)
+	err = dp.RemoveFromSets(setsTocreate, podMetadata)
 	require.NoError(t, err)
 
-	err = dp.RemoveFromSet(setsTocreate, v6PodMetadata)
+	err = dp.RemoveFromSets(setsTocreate, v6PodMetadata)
 	require.NoError(t, err)
 
 	for _, v := range setsTocreate {
