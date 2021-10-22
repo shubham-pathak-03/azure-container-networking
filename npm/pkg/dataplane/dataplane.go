@@ -116,14 +116,15 @@ func (dp *DataPlane) AddToSet(setNames []*ipsets.IPSetMetadata, podMetadata *Pod
 	if err != nil {
 		return fmt.Errorf("[DataPlane] error while adding to set: %w", err)
 	}
+	if dp.shouldUpdatePod() {
+		klog.Infof("[Dataplane] Updating Sets to Add for pod key %s", podMetadata.PodKey)
+		if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
+			klog.Infof("[Dataplane] {AddToSet} pod key %s not found creating a new obj", podMetadata.PodKey)
+			dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
+		}
 
-	klog.Infof("[Dataplane] Updating Sets to Add for pod key %s", podMetadata.PodKey)
-	if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
-		klog.Infof("[Dataplane] {AddToSet} pod key %s not found creating a new obj", podMetadata.PodKey)
-		dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
+		dp.updatePodCache[podMetadata.PodKey].updateIPSetsToAdd(setNames)
 	}
-
-	dp.updatePodCache[podMetadata.PodKey].updateIPSetsToAdd(setNames)
 
 	return nil
 }
@@ -136,13 +137,15 @@ func (dp *DataPlane) RemoveFromSet(setNames []*ipsets.IPSetMetadata, podMetadata
 		return fmt.Errorf("[DataPlane] error while removing from set: %w", err)
 	}
 
-	klog.Infof("[Dataplane] Updating Sets to Remove for pod key %s", podMetadata.PodKey)
-	if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
-		klog.Infof("[Dataplane] {RemoveFromSet} pod key %s not found creating a new obj", podMetadata.PodKey)
-		dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
-	}
+	if dp.shouldUpdatePod() {
+		klog.Infof("[Dataplane] Updating Sets to Remove for pod key %s", podMetadata.PodKey)
+		if _, ok := dp.updatePodCache[podMetadata.PodKey]; !ok {
+			klog.Infof("[Dataplane] {RemoveFromSet} pod key %s not found creating a new obj", podMetadata.PodKey)
+			dp.updatePodCache[podMetadata.PodKey] = newUpdateNPMPod(podMetadata)
+		}
 
-	dp.updatePodCache[podMetadata.PodKey].updateIPSetsToRemove(setNames)
+		dp.updatePodCache[podMetadata.PodKey].updateIPSetsToRemove(setNames)
+	}
 
 	return nil
 }
@@ -167,11 +170,6 @@ func (dp *DataPlane) RemoveFromList(listName *ipsets.IPSetMetadata, setNames []*
 	return nil
 }
 
-// ShouldUpdatePod will let controller know if its needs to aggregate pod data for update pod call.
-func (dp *DataPlane) ShouldUpdatePod() bool {
-	return dp.shouldUpdatePod()
-}
-
 // ApplyDataPlane all the IPSet operations just update cache and update a dirty ipset structure,
 // they do not change apply changes into dataplane. This function needs to be called at the
 // end of IPSet operations of a given controller event, it will check for the dirty ipset list
@@ -183,12 +181,14 @@ func (dp *DataPlane) ApplyDataPlane() error {
 		return fmt.Errorf("[DataPlane] error while applying IPSets: %w", err)
 	}
 
-	for podKey, pod := range dp.updatePodCache {
-		err := dp.updatePod(pod)
-		if err != nil {
-			return fmt.Errorf("[DataPlane] error while updating pod: %w", err)
+	if dp.shouldUpdatePod() {
+		for podKey, pod := range dp.updatePodCache {
+			err := dp.updatePod(pod)
+			if err != nil {
+				return fmt.Errorf("[DataPlane] error while updating pod: %w", err)
+			}
+			delete(dp.updatePodCache, podKey)
 		}
-		delete(dp.updatePodCache, podKey)
 	}
 	return nil
 }
