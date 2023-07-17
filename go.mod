@@ -101,7 +101,7 @@ require (
 
 require (
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
-	github.com/jsternberg/zap-logfmt v1.2.0
+	github.com/jsternberg/zap-logfmt v1.3.0
 	go.uber.org/zap v1.21.0
 )
 
