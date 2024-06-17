@@ -10,6 +10,7 @@ pr:
       - ".vscode"
       - ".github"
       - docs
+#Add ip service tag to pipelines
 
 trigger:
   branches:
